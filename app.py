@@ -31,14 +31,16 @@ P1_JUMP_VY        = -15.0   # 一段跳初速（向上為負）
 P1_DOUBLE_JUMP_VY = -12.0   # 二段跳初速
 
 # P2 技能
-P2_UPSKILL_JUMP_VY        = -15.0  # upskill 起跳速度
-P2_DOWNSKILL_JUMP_VY      = -12.0  # downskill 起跳速度
+P2_UPSKILL_JUMP_VY        = -12.0  # upskill 起跳速度
+P2_DOWNSKILL_JUMP_VY      = -15.0  # downskill 起跳速度
 P2_UPSKILL_SPAWN_TICK     = 30     # upskill 起跳後第幾 TICK 召喚障礙物
 P2_DOWNSKILL_LAND_IMPULSE = -9.0   # downskill 落地時給地面障礙物的向上速度
+# 地面（僅外觀）震動/抖動參數
+GROUND_ANIM_VY_START      = -5.0   # 地面外觀的初始向上速度（負值）
 
 # ---- 障礙物 ----
-OBSTACLE_WIDTH  = 60
-OBSTACLE_HEIGHT = 60
+OBSTACLE_WIDTH  = 40
+OBSTACLE_HEIGHT = 40
 OBSTACLE_SPEED  = 5                 # 每 TICK 水平移動像素
 SPAWN_INTERVAL_TICKS = 300          # 每隔幾 TICK 生成一個障礙物（120=1秒）
 
@@ -46,7 +48,7 @@ SPAWN_INTERVAL_TICKS = 300          # 每隔幾 TICK 生成一個障礙物（120
 OBS_BOUNCE_VY_START       = -7.0   # 初始反彈速度（向上）
 OBS_BOUNCE_VY_DECREMENT   =  1.0   # 每次反彈速度衰減量（絕對值減少）
 OBS_BOUNCE_VY_MIN         = -3.0   # 反彈速度下限
-OBS_BOUNCE_COOLDOWN_TICKS =  0     # 落地後冷卻 TICK 數（0=立即再跳）
+OBS_BOUNCE_COOLDOWN_TICKS =  1     # 落地後冷卻 TICK 數（0=立即再跳）
 
 # ---- Sprite 名稱 ----
 P1_SPRITE        = 'player_1.png'
@@ -58,12 +60,12 @@ P2_SPRITE_SQUAT  = 'player_2_squat.png'
 # sequence: sprite 清單；frames: 每個 sprite 持續 TICK 數
 P2_SKILL_SETS = {
     'upskill': {
-        'sequence': [P2_SPRITE_SQUAT, P2_SPRITE_NORMAL, P2_SPRITE_ROAR],
-        'frames':   [30,              30,               30]
+        'sequence': [P2_SPRITE_SQUAT, P2_SPRITE_ROAR, P2_SPRITE_SQUAT],
+        'frames':   [15,              20,               15]
     },
     'downskill': {
-        'sequence': [P2_SPRITE_SQUAT, P2_SPRITE_ROAR, P2_SPRITE_NORMAL],
-        'frames':   [30,              30,              30]
+        'sequence': [P2_SPRITE_SQUAT],
+        'frames':   [80]
     }
 }
 DEFAULT_P2_SKILL = 'upskill'
@@ -147,6 +149,8 @@ def reset_game():
     game_state['score']          = 0
     game_state['gameOver']       = False
     game_state['gameOverReason'] = ''
+    # cosmetic ground animation state (offset in pixels, vy in px/tick)
+    game_state['ground_animation'] = {'offset': 0.0, 'vy': 0.0}
 
 
 
@@ -420,8 +424,11 @@ def game_loop():
                                     obs['bounce_cooldown'] = 0
                                     if 'current_bounce_vy' not in obs:
                                         obs['current_bounce_vy'] = OBS_BOUNCE_VY_START
+                            # 觸發下砸技能的地面外觀動畫（僅外觀，不影響碰撞）
+                            game_state.setdefault('ground_animation', {'offset': 0.0, 'vy': 0.0})
+                            game_state['ground_animation']['vy'] = GROUND_ANIM_VY_START
                             socketio.emit('skill_event', {'skill': 'downskill', 'event': 'land'})
-                            print(f"[downskill] land impulse tick={tick_count}")
+                            print(f"[downskill] land impulse + ground anim tick={tick_count}")
 
         # ── 2. 外觀排程推進 ──────────────────────────────────
         for role, player in game_state['players'].items():
@@ -462,9 +469,10 @@ def game_loop():
                     if obs['y'] >= GROUND_Y:
                         obs['y']  = GROUND_Y
                         obs['vy'] = 0.0
-                        # 衰減下次反彈速度
+                        # 衰減下次反彈速度（僅在落地時一次性調整）
                         nv = obs.get('current_bounce_vy', OBS_BOUNCE_VY_START) + OBS_BOUNCE_VY_DECREMENT
-                        obs['current_bounce_vy'] = max(nv, OBS_BOUNCE_VY_MIN)
+                        # 由於速度為負值，使用 min() 以確保不會超過（數值上變大）允許的最小負速度
+                        obs['current_bounce_vy'] = min(nv, OBS_BOUNCE_VY_MIN)
                         obs['bounce_cooldown']   = OBS_BOUNCE_COOLDOWN_TICKS
 
             # ── 4. P1 碰撞 → 遊戲結束 ─────────────────────────
@@ -497,7 +505,19 @@ def game_loop():
                 'current_bounce_vy': OBS_BOUNCE_VY_START,
             })
 
-        # ── 6. 廣播 ───────────────────────────────────────────
+        # ── 6. 地面（外觀）動畫推進（僅視覺）────────────────────────
+        ga = game_state.get('ground_animation')
+        if ga:
+            # 使用與物理相同的重力感覺拉回地面（這裡僅為外觀）
+            if ga.get('vy', 0.0) != 0.0 or ga.get('offset', 0.0) != 0.0:
+                ga['vy'] += GRAVITY
+                ga['offset'] += ga['vy']
+                # 不允許地面往下穿過原位（offset>0 表示往下）
+                if ga['offset'] > 0:
+                    ga['offset'] = 0.0
+                    ga['vy'] = 0.0
+
+        # ── 7. 廣播 ───────────────────────────────────────────
         socketio.emit('state', game_state)
 
 

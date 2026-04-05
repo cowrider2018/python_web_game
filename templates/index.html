@@ -201,12 +201,18 @@
     function update() {
         ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-        // 地面
-        ctx.fillStyle = '#2d5016';
-        ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 40);
-
-        if (!latestState) { requestAnimationFrame(update); return; }
+        if (!latestState) {
+            // 無狀態時繪製靜態地面
+            ctx.fillStyle = '#2d5016';
+            ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 40);
+            requestAnimationFrame(update);
+            return;
+        }
         const state = latestState;
+        // 從伺服器狀態讀取地面外觀偏移（僅視覺，不影響碰撞）
+        const groundOffset = state.ground_animation && typeof state.ground_animation.offset === 'number' ? state.ground_animation.offset : 0;
+        ctx.fillStyle = '#2d5016';
+        ctx.fillRect(0, GROUND_Y + groundOffset, CANVAS_WIDTH, 40);
 
         // 玩家
         if (state.players) {
