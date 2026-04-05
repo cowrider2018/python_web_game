@@ -1,0 +1,272 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+    <meta charset="UTF-8">
+    <title>跳躍遊戲 - 連機版</title>
+    <style>
+        body { text-align: center; background-color: #333; color: white; font-family: Arial, sans-serif; }
+        canvas { background-color: #87ceeb; border: 5px solid #555; display: block; margin: 20px auto; touch-action: none; }
+    </style>
+</head>
+<body>
+    <h1>跳躍遊戲</h1>
+    <canvas id="gameCanvas" width="800" height="600"></canvas>
+    <div id="statusText">角色分配中...</div>
+    <div><button id="joinBtn">加入遊戲</button></div>
+    <h2 id="scoreDisplay">Score: 0</h2>
+    <audio id="p2SoundRoar" preload="auto">
+        <source src="{{ url_for('static', filename='audio/p2_upsk.mp3') }}" type="audio/mpeg">
+    </audio>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.6.1/socket.io.min.js"></script>
+    <script>
+    // ============================================================
+    // 畫布 / 常數（由 /game_config 覆蓋）
+    // ============================================================
+    let CANVAS_WIDTH  = 800;
+    let CANVAS_HEIGHT = 600;
+    let GROUND_Y      = CANVAS_HEIGHT - 40;
+    let PLAYER_WIDTH  = 40;
+    let PLAYER_HEIGHT = 40;
+    let OBSTACLE_WIDTH  = 60;
+    let OBSTACLE_HEIGHT = 60;
+
+    // ============================================================
+    // Sprite 圖片載入（4 張）
+    // ============================================================
+    const SPRITE_MAP = {};
+    const SPRITE_FILES = [
+        'player_1.png',
+        'player_2_normal.png',
+        'player_2_roar.png',
+        'player_2_squat.png'
+    ];
+    let _loadedImgs  = 0;
+    let _configReady = false;
+    SPRITE_FILES.forEach(name => {
+        const img = new Image();
+        img.src = `/static/img/${name}`;
+        img.onload = () => { _loadedImgs++; startIfReady(); };
+        if (img.complete) { _loadedImgs++; }
+        SPRITE_MAP[name] = img;
+    });
+
+    function spriteImg(name) {
+        return SPRITE_MAP[name] || SPRITE_MAP['player_1.png'];
+    }
+
+    // ============================================================
+    // 音效
+    // ============================================================
+    const p2SoundRoar = document.getElementById('p2SoundRoar');
+    function playSound(el) {
+        try { el.currentTime = 0; const p = el.play(); if (p && p.catch) p.catch(() => {}); } catch(e) {}
+    }
+
+    // ============================================================
+    // 連線 / 狀態
+    // ============================================================
+    const canvas      = document.getElementById('gameCanvas');
+    const ctx         = canvas.getContext('2d');
+    const scoreDisplay = document.getElementById('scoreDisplay');
+    const statusText   = document.getElementById('statusText');
+    const joinBtn      = document.getElementById('joinBtn');
+
+    let assigned    = 0;
+    let playerCount = 0;
+    let latestState = null;
+
+    const socket = io();
+
+    socket.on('connect', () => {
+        statusText.innerText = '連線已建立，請按「加入遊戲」';
+    });
+
+    joinBtn.addEventListener('click', () => {
+        socket.emit(assigned === 0 ? 'join' : 'leave');
+    });
+
+    socket.on('assign', data => {
+        assigned    = data.assigned;
+        playerCount = data.count || playerCount;
+        updateJoinBtn();
+        if (assigned)
+            statusText.innerText = `玩家 ${assigned}`;
+        else
+            statusText.innerText = '觀眾身份';
+    });
+
+    socket.on('player_count', data => {
+        playerCount = data.count || playerCount;
+        updateJoinBtn();
+    });
+
+    socket.on('state', data => {
+        if (data) latestState = data;
+    });
+
+    // 伺服器通知音效事件
+    socket.on('skill_event', data => {
+        if (data.skill === 'upskill' && data.event === 'roar') {
+            playSound(p2SoundRoar);
+        }
+    });
+
+    function updateJoinBtn() {
+        if (assigned !== 0) {
+            joinBtn.disabled = false;
+            joinBtn.innerText = '退出遊戲';
+        } else if (playerCount >= 2) {
+            joinBtn.disabled = true;
+            joinBtn.innerText = '已滿';
+        } else {
+            joinBtn.disabled = false;
+            joinBtn.innerText = '加入遊戲';
+        }
+    }
+
+    // ============================================================
+    // 輸入處理
+    // ============================================================
+    const SWIPE_THRESHOLD = 30;
+    let touchStartX = 0, touchStartY = 0;
+
+    // P1：鍵盤空格 / 點擊
+    window.addEventListener('keydown', e => {
+        if (e.code === 'Space') {
+            e.preventDefault();
+            if (assigned === 0) return;
+            if (!latestState || latestState.gameOver) { socket.emit('request_reset'); return; }
+            socket.emit('jump', { role: assigned });
+        }
+    });
+
+    canvas.addEventListener('click', () => {
+        if (assigned === 0 || assigned === 2) return;
+        if (!latestState || latestState.gameOver) { socket.emit('request_reset'); return; }
+        socket.emit('jump', { role: assigned });
+    });
+
+    // P2：觸控上滑 / 下滑
+    canvas.addEventListener('touchstart', e => {
+        if (assigned !== 2) return;
+        e.preventDefault();
+        touchStartX = e.touches[0].clientX;
+        touchStartY = e.touches[0].clientY;
+    }, { passive: false });
+
+    canvas.addEventListener('touchend', e => {
+        if (assigned !== 2) return;
+        e.preventDefault();
+        if (!latestState || latestState.gameOver) { socket.emit('request_reset'); return; }
+        const dx = e.changedTouches[0].clientX - touchStartX;
+        const dy = e.changedTouches[0].clientY - touchStartY;
+        if (Math.abs(dy) > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+            socket.emit(dy < 0 ? 'swipe_up' : 'swipe_down', {});
+        }
+    }, { passive: false });
+
+    // ============================================================
+    // 繪製函式
+    // ============================================================
+    function drawPlayer(player, role) {
+        const spriteName = player.sprite || (Number(role) === 2 ? 'player_2_normal.png' : 'player_1.png');
+        const img = spriteImg(spriteName);
+        const s   = PLAYER_WIDTH;
+
+        if (Number(role) === 2) {
+            // P2 放大 3 倍，腳底對齊
+            const s2 = s * 3;
+            const dx = player.x + (s - s2) / 2;
+            const dy = player.y + (s - s2);
+            ctx.drawImage(img, dx, dy, s2, s2);
+        } else {
+            // P1 水平翻轉
+            ctx.save();
+            ctx.translate(player.x + s / 2, player.y + s / 2);
+            ctx.scale(-1, 1);
+            ctx.drawImage(img, -s / 2, -s / 2, s, s);
+            ctx.restore();
+        }
+    }
+
+    function drawObstacle(obs) {
+        ctx.fillStyle = '#8b4513';
+        ctx.fillRect(obs.x, obs.y - OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_HEIGHT);
+    }
+
+    // ============================================================
+    // 主渲染迴圈
+    // ============================================================
+    function update() {
+        ctx.clearRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+        // 地面
+        ctx.fillStyle = '#2d5016';
+        ctx.fillRect(0, GROUND_Y, CANVAS_WIDTH, 40);
+
+        if (!latestState) { requestAnimationFrame(update); return; }
+        const state = latestState;
+
+        // 玩家
+        if (state.players) {
+            for (const role in state.players) {
+                const player = state.players[role];
+                if (!player.active) continue;
+                drawPlayer(player, role);
+                ctx.fillStyle = Number(role) === assigned ? 'yellow' : 'white';
+                ctx.font = '12px Arial';
+                ctx.fillText(player.name || `P${role}`, player.x + 5, player.y - 10);
+            }
+        }
+
+        // 障礙物
+        if (state.obstacles) state.obstacles.forEach(drawObstacle);
+
+        // 分數
+        scoreDisplay.innerText = `Score: ${state.score}`;
+
+        // 遊戲結束
+        if (state.gameOver) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+            ctx.fillStyle = 'white';
+            ctx.font = 'bold 48px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('遊戲結束!', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 40);
+            ctx.font = '24px Arial';
+            ctx.fillText(`最終分數: ${state.score}`, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 20);
+            ctx.font = '18px Arial';
+            ctx.fillText('點擊重新開始', CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 + 70);
+            ctx.textAlign = 'left';
+        }
+
+        requestAnimationFrame(update);
+    }
+
+    // ============================================================
+    // 等待圖片 + config 載入後啟動
+    // ============================================================
+    function startIfReady() {
+        if (_loadedImgs >= SPRITE_FILES.length && _configReady) {
+            requestAnimationFrame(update);
+        }
+    }
+
+    fetch('/game_config').then(r => r.json()).then(cfg => {
+        CANVAS_WIDTH    = cfg.canvas_width    || CANVAS_WIDTH;
+        CANVAS_HEIGHT   = cfg.canvas_height   || CANVAS_HEIGHT;
+        GROUND_Y        = cfg.ground_y        || (CANVAS_HEIGHT - 40);
+        PLAYER_WIDTH    = cfg.player_width    || PLAYER_WIDTH;
+        PLAYER_HEIGHT   = cfg.player_height   || PLAYER_HEIGHT;
+        OBSTACLE_WIDTH  = cfg.obstacle_width  || OBSTACLE_WIDTH;
+        OBSTACLE_HEIGHT = cfg.obstacle_height || OBSTACLE_HEIGHT;
+        canvas.width  = CANVAS_WIDTH;
+        canvas.height = CANVAS_HEIGHT;
+        _configReady = true;
+        startIfReady();
+    }).catch(() => { _configReady = true; startIfReady(); });
+
+    </script>
+</body>
+</html>
