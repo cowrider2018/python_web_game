@@ -106,7 +106,7 @@ def game_loop() -> None:
                 else:
                     player['sprite'] = P2_SPRITE_NORMAL if role == 2 else P1_SPRITE
 
-        # ── 3 & 4. 障礙物物理 + P1 碰撞 ────────────────────
+        # ── 3 & 4. 障礙物物理 + P1 碰撞 / 站在障礙物上 ────────────────
         new_obstacles = []
         p1 = gs.game_state['players'].get(1)
         for obs in gs.game_state['obstacles']:
@@ -127,9 +127,58 @@ def game_loop() -> None:
                         obs['current_bounce_vy'] = min(nv, OBS_BOUNCE_VY_MIN)
                         obs['bounce_cooldown']   = OBS_BOUNCE_COOLDOWN_TICKS
 
-            if p1 and p1['active'] and gs.check_collision(p1, obs):
-                gs.game_state['gameOver']       = True
-                gs.game_state['gameOverReason'] = 'P1 hit obstacle'
+            # ---- P1 landing on top of obstacle (可以站在障礙物上) ----
+            if p1 and p1['active']:
+                obs_top = obs['y'] - OBSTACLE_HEIGHT
+                player_bottom = p1['y'] + PLAYER_HEIGHT
+                # previous tick bottom (before this tick's movement)
+                prev_player_bottom = player_bottom - p1.get('vel', 0)
+                # predicted next tick bottom (if needed)
+                next_player_bottom = player_bottom + p1.get('vel', 0)
+                # 更穩健的水平重疊判定：計算水平重疊寬度
+                p_left = p1['x']
+                p_right = p1['x'] + PLAYER_WIDTH
+                obs_left = obs['x']
+                obs_right = obs['x'] + OBSTACLE_WIDTH
+                overlap = min(p_right, obs_right) - max(p_left, obs_left)
+                # 只要有少量重疊即可視為水平對齊（容許緩衝）
+                horiz_ok = overlap > max(2, PLAYER_WIDTH * 0.2)
+                # landing condition:
+                # - falling (vel>0) and horizontal aligned, and
+                # - either we crossed the top this tick (prev_bottom <= obs_top <= player_bottom)
+                # - or we are above and would intersect next tick (player_bottom <= obs_top < next_player_bottom)
+                vel = p1.get('vel', 0)
+                crossed_this_tick = (vel > 0 and prev_player_bottom <= obs_top and player_bottom >= obs_top)
+                will_cross_next = (vel > 0 and player_bottom <= obs_top and next_player_bottom >= obs_top)
+                if horiz_ok and (crossed_this_tick or will_cross_next):
+                    # place player on top of obstacle and sync vertical velocity
+                    p1['y'] = obs_top - PLAYER_HEIGHT
+                    # if obstacle is moving vertically, let player inherit its vy (可一起彈跳)
+                    p1['vel'] = obs.get('vy', 0)
+                    p1['isJumping'] = False
+                    p1['canDouble'] = True
+                    p1['standing_on'] = obs
+                    print(f"[land] P1 landed on obs id={id(obs)} at tick={gs.tick_count} overlap={overlap:.1f} prev_bottom={prev_player_bottom:.1f} player_bottom={player_bottom:.1f} obs_top={obs_top:.1f} vel={vel:.2f}")
+                else:
+                    # If player is already standing on this obstacle, maintain support instead of treating as side collision
+                    if p1.get('standing_on') is obs:
+                        # require a minimal positive overlap to remain supported
+                        if overlap <= 0:
+                            # no longer supported
+                            p1.pop('standing_on', None)
+                            print(f"[unsupport] P1 lost support on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
+                        else:
+                            # refresh player's top alignment
+                            p1['y'] = obs_top - PLAYER_HEIGHT
+                            p1['vel'] = obs.get('vy', 0)
+                            # still considered standing
+                            print(f"[support] P1 remains on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
+                    else:
+                        # side / non-top collision -> game over
+                        if gs.check_collision(p1, obs):
+                            print(f"[hit] P1 collision with obs id={id(obs)} overlap={overlap:.1f} p_bottom={player_bottom:.1f} obs_top={obs_top:.1f}")
+                            gs.game_state['gameOver']       = True
+                            gs.game_state['gameOverReason'] = 'P1 hit obstacle'
 
             if not obs.get('scored') and obs['x'] + OBSTACLE_WIDTH < (p1['x'] if p1 else 0):
                 gs.game_state['score'] += 1
@@ -139,6 +188,32 @@ def game_loop() -> None:
                 new_obstacles.append(obs)
 
         gs.game_state['obstacles'] = new_obstacles
+
+        # 確保站在障礙物上的玩家跟隨障礙物的垂直運動或失去支撐時掉落
+        for role, player in gs.game_state['players'].items():
+            standing = player.get('standing_on')
+            if not standing:
+                continue
+            # if the obstacle was removed or moved away, clear standing flag
+            if standing not in gs.game_state['obstacles']:
+                player.pop('standing_on', None)
+                continue
+            # check horizontal still overlaps
+            obs = standing
+            obs_top = obs['y'] - OBSTACLE_HEIGHT
+            player_center_x = player['x'] + PLAYER_WIDTH / 2
+            obs_center_x = obs['x'] + OBSTACLE_WIDTH / 2
+            horiz_ok = abs(player_center_x - obs_center_x) <= (OBSTACLE_WIDTH + PLAYER_WIDTH) / 2
+            if not horiz_ok:
+                # no longer supported
+                player.pop('standing_on', None)
+                continue
+            # follow obstacle's vertical position
+            player['y'] = obs_top - PLAYER_HEIGHT
+            # if obstacle has an upward impulse (vy), transfer it to player so they bounce together
+            if obs.get('vy'):
+                player['vel'] = obs['vy']
+                player['isJumping'] = True
 
         # ── 5. 生成新障礙物 ─────────────────────────────────
         spawn_t += 1
