@@ -5,7 +5,6 @@
     const canvas       = document.getElementById('gameCanvas');
     const scoreDisplay = document.getElementById('scoreDisplay');
     const statusText   = document.getElementById('statusText');
-    const joinBtn      = document.getElementById('joinBtn');
     const p2SoundRoar  = document.getElementById('p2SoundRoar');
 
     // ── 音效 ──
@@ -18,26 +17,29 @@
     }
 
     // ── UI ──
-    function updateJoinBtn() {
-        if (Network.assigned !== 0) {
-            joinBtn.disabled  = false;
-            joinBtn.innerText = '退出遊戲';
-        } else if (Network.playerCount >= 2) {
-            joinBtn.disabled  = true;
-            joinBtn.innerText = '已滿';
+    function updateStatusText() {
+        if (Network.assigned === 0) {
+            if (Network.playerCount >= 2) {
+                statusText.innerText = 'GAME FULL';
+                statusText.style.cursor = 'default';
+            } else {
+                statusText.innerText = 'TAP TO JOIN';
+                statusText.style.cursor = 'pointer';
+            }
         } else {
-            joinBtn.disabled  = false;
-            joinBtn.innerText = '加入遊戲';
+            statusText.style.display = 'none';
         }
     }
 
-    Network.on('connect',      ()   => { statusText.innerText = '連線已建立，請按「加入遊戲」'; });
-    Network.on('assign',       data => { statusText.innerText = data.assigned ? `玩家 ${data.assigned}` : '觀眾身份'; updateJoinBtn(); });
-    Network.on('player_count', ()   => updateJoinBtn());
+    Network.on('connect',      ()   => { updateStatusText(); });
+    Network.on('assign',       data => { updateStatusText(); });
+    Network.on('player_count', ()   => { updateStatusText(); });
     Network.on('skill_event',  data => { if (data.skill === 'upskill' && data.event === 'roar') playSound(p2SoundRoar); });
 
-    joinBtn.addEventListener('click', () => {
-        Network.assigned === 0 ? Network.join() : Network.leave();
+    statusText.addEventListener('click', () => {
+        if (Network.assigned === 0 && Network.playerCount < 2) {
+            Network.join();
+        }
     });
 
     // ── 等待 config + sprites 都準備好再啟動 ──

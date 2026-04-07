@@ -5,13 +5,32 @@
     <title>PWG</title>
     <style>
         body   { text-align: center; background-color: #333; color: white; font-family: Arial, sans-serif; }
-        canvas { background-color: #87ceeb; border: 5px solid #555; display: block; margin: 20px auto; touch-action: none; }
+        canvas { background-color: #87ceeb; border: 5px solid #555; display: block; margin: 20px auto; touch-action: none; position: relative; }
+        #statusText {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background-color: rgba(255, 255, 255, 0.3);
+            color: white;
+            padding: 30px 50px;
+            border-radius: 10px;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            user-select: none;
+            z-index: 100;
+        }
+        #statusText:hover {
+            background-color: rgba(255, 255, 255, 0.5);
+        }
     </style>
 </head>
 <body>
-    <canvas id="gameCanvas" width="800" height="600"></canvas>
-    <div id="statusText">角色分配中...</div>
-    <div><button id="joinBtn">加入遊戲</button></div>
+    <div style="position: relative; display: inline-block;">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="statusText"></div>
+    </div>
     <h2 id="scoreDisplay">Score: 0</h2>
     <audio id="p2SoundRoar" preload="auto">
         <source src="{{ url_for('static', filename='audio/p2_upsk.mp3') }}" type="audio/mpeg">

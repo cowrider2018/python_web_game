@@ -94,16 +94,16 @@ const Renderer = (() => {
 
                 // 遊戲結束 overlay
                 if (state.gameOver) {
-                    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                    ctx.fillStyle = 'rgba(0,0,0,0)';
                     ctx.fillRect(0, 0, cfg.CANVAS_WIDTH, cfg.CANVAS_HEIGHT);
                     ctx.textAlign = 'center';
                     ctx.fillStyle = 'white';
                     ctx.font = 'bold 48px Arial';
-                    ctx.fillText('遊戲結束!', cfg.CANVAS_WIDTH / 2, cfg.CANVAS_HEIGHT / 2 - 40);
+                    ctx.fillText('GAME OVER!', cfg.CANVAS_WIDTH / 2, cfg.CANVAS_HEIGHT / 2 - 40);
                     ctx.font = '24px Arial';
-                    ctx.fillText(`最終分數: ${state.score}`, cfg.CANVAS_WIDTH / 2, cfg.CANVAS_HEIGHT / 2 + 20);
+                    ctx.fillText(`SCORE: ${state.score}`, cfg.CANVAS_WIDTH / 2, cfg.CANVAS_HEIGHT / 2 + 20);
                     ctx.font = '18px Arial';
-                    ctx.fillText('點擊重新開始', cfg.CANVAS_WIDTH / 2, cfg.CANVAS_HEIGHT / 2 + 70);
+                    ctx.fillText('TAP TO RESTART', cfg.CANVAS_WIDTH / 2, cfg.CANVAS_HEIGHT / 2 + 70);
                     ctx.textAlign = 'left';
                 }
             }
