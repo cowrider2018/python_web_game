@@ -131,16 +131,6 @@
     const SWIPE_THRESHOLD = 30;
     let touchStartX = 0, touchStartY = 0;
 
-    // P1：鍵盤空格 / 點擊
-    window.addEventListener('keydown', e => {
-        if (e.code === 'Space') {
-            e.preventDefault();
-            if (assigned === 0) return;
-            if (!latestState || latestState.gameOver) { socket.emit('request_reset'); return; }
-            socket.emit('jump', { role: assigned });
-        }
-    });
-
     canvas.addEventListener('click', () => {
         if (assigned === 0 || assigned === 2) return;
         if (!latestState || latestState.gameOver) { socket.emit('request_reset'); return; }
@@ -274,5 +264,9 @@
     }).catch(() => { _configReady = true; startIfReady(); });
 
     </script>
+
+    {% if DEBUG %}
+    <script id="test_tool" src="{{ url_for('static', filename='test/test_tool.js') }}"></script>
+    {% endif %}
 </body>
 </html>
