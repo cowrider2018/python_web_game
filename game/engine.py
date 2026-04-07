@@ -59,10 +59,12 @@ def game_loop() -> None:
                             'scored':            False,
                             'jumping':           True,
                             'vy':                OBS_BOUNCE_VY_START,
+                            'vx':                OBSTACLE_SPEED + P2_UPSKILL_FIREBALL_VX,  # 火球額外水平速度
                             'bounce_cooldown':   0,
                             'current_bounce_vy': OBS_BOUNCE_VY_START,
+                            'is_fireball':       True,  # 標記為火球（不可踩）
                         })
-                        print(f"[upskill] obstacle spawned tick={gs.tick_count}")
+                        print(f"[upskill] fireball spawned tick={gs.tick_count}")
 
                 # 落地
                 if player['y'] >= gt:
@@ -110,7 +112,8 @@ def game_loop() -> None:
         new_obstacles = []
         p1 = gs.game_state['players'].get(1)
         for obs in gs.game_state['obstacles']:
-            obs['x'] -= OBSTACLE_SPEED
+            # 使用障礙物自身的 vx（如有），否則用預設速度；火球(vx=OBSTACLE_SPEED+P2_UPSKILL_FIREBALL_VX)
+            obs['x'] -= obs.get('vx', OBSTACLE_SPEED)
 
             if obs.get('jumping'):
                 if obs.get('bounce_cooldown', 0) > 0:
@@ -150,7 +153,8 @@ def game_loop() -> None:
                 vel = p1.get('vel', 0)
                 crossed_this_tick = (vel > 0 and prev_player_bottom <= obs_top and player_bottom >= obs_top)
                 will_cross_next = (vel > 0 and player_bottom <= obs_top and next_player_bottom >= obs_top)
-                if horiz_ok and (crossed_this_tick or will_cross_next):
+                # 火球(is_fireball=True)不可踩踏，只有普通障礙物可以
+                if horiz_ok and (crossed_this_tick or will_cross_next) and not obs.get('is_fireball', False):
                     # place player on top of obstacle and sync vertical velocity
                     p1['y'] = obs_top - PLAYER_HEIGHT
                     # if obstacle is moving vertically, let player inherit its vy (可一起彈跳)
@@ -162,17 +166,13 @@ def game_loop() -> None:
                 else:
                     # If player is already standing on this obstacle, maintain support instead of treating as side collision
                     if p1.get('standing_on') is obs:
-                        # require a minimal positive overlap to remain supported
-                        if overlap <= 0:
-                            # no longer supported
-                            p1.pop('standing_on', None)
-                            print(f"[unsupport] P1 lost support on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
-                        else:
-                            # refresh player's top alignment
-                            p1['y'] = obs_top - PLAYER_HEIGHT
-                            p1['vel'] = obs.get('vy', 0)
-                            # still considered standing
-                            print(f"[support] P1 remains on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
+                        # refresh player's top alignment
+                        p1['y'] = obs_top - PLAYER_HEIGHT
+                        p1['vel'] = obs.get('vy', 0)
+                        # still considered standing
+                        # small overlap may occur; do not treat as collision
+                        # debug print for visibility
+                        print(f"[support] P1 remains on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
                     else:
                         # side / non-top collision -> game over
                         if gs.check_collision(p1, obs):
@@ -225,8 +225,10 @@ def game_loop() -> None:
                 'scored':            False,
                 'jumping':           False,
                 'vy':                0.0,
+                'vx':                OBSTACLE_SPEED,  # 普通障礙物的水平速度
                 'bounce_cooldown':   0,
                 'current_bounce_vy': OBS_BOUNCE_VY_START,
+                'is_fireball':       False,  # 普通障礙物，可踩踏
             })
 
         # ── 6. 地面外觀動畫推進 ─────────────────────────────

@@ -55,7 +55,8 @@ const Renderer = (() => {
 
     function _drawObstacle(ctx, obs) {
         const cfg = GameConfig;
-        ctx.fillStyle = '#8b4513';
+        // 火球用紅色，普通障礙物用棕色
+        ctx.fillStyle = obs.is_fireball ? '#ff2020' : '#8b4513';
         ctx.fillRect(obs.x, obs.y - cfg.OBSTACLE_HEIGHT, cfg.OBSTACLE_WIDTH, cfg.OBSTACLE_HEIGHT);
     }
 
