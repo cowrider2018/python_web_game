@@ -19,6 +19,7 @@ game_state: dict = {
     'obstacles':        [],
     'score':            0,
     'gameOver':         False,
+    'dying':            False,  # 死亡動畫模式（P1 掉落到掉出畫面）
     'gameOverReason':   '',
     'ground_animation': {'offset': 0.0, 'vy': 0.0},
 }
@@ -83,6 +84,7 @@ def reset_game() -> None:
     game_state['obstacles']         = []
     game_state['score']             = 0
     game_state['gameOver']          = False
+    game_state['dying']             = False  # 重置死亡動畫狀態，恢復正常物理
     game_state['gameOverReason']    = ''
     game_state['ground_animation']  = {'offset': 0.0, 'vy': 0.0}
 

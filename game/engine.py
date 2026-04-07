@@ -31,15 +31,34 @@ def game_loop() -> None:
         sio.sleep(dt)
         gs.tick_count += 1
 
+        # 遊戲已結束，完全暫停所有遊戲邏輯，只廣播狀態
         if gs.game_state['gameOver']:
             sio.emit('state', gs.game_state)
             continue
+
+        # 死亡動畫模式：P1 掉落至掉出畫面，障礙物繼續運動
+        if gs.game_state['dying']:
+            p1 = gs.game_state['players'].get(1)
+            if p1 and p1['active']:
+                # 應用重力，讓 P1 自由掉落
+                p1['vel'] += GRAVITY
+                p1['y']   += p1['vel']
+                # 繼承水平速度（來自碰撞的障礙物 vx），讓 P1 水平移動
+                p1['x']  -= p1.get('vx', 0)
+                # P1 掉出畫面後設置 gameOver
+                if p1['y'] > CANVAS_HEIGHT:
+                    gs.game_state['gameOver'] = True
+            # 在死亡動畫期間，障礙物仍然移動和彈跳，但跳過P1碰撞檢查
+            # 直接進入 obstacle 物理部分，稍後會跳過 P1 碰撞檢查
 
         gt = gs.ground_top()
 
         # ── 1. 玩家物理 ─────────────────────────────────────
         for role, player in gs.game_state['players'].items():
             if not player['active']:
+                continue
+            # 死亡動畫期間，P1 已在早期單獨處理，跳過此部分
+            if gs.game_state['dying'] and role == 1:
                 continue
 
             if player['y'] < gt or player['vel'] != 0.0:
@@ -114,7 +133,6 @@ def game_loop() -> None:
         for obs in gs.game_state['obstacles']:
             # 使用障礙物自身的 vx（如有），否則用預設速度；火球(vx=OBSTACLE_SPEED+P2_UPSKILL_FIREBALL_VX)
             obs['x'] -= obs.get('vx', OBSTACLE_SPEED)
-
             if obs.get('jumping'):
                 if obs.get('bounce_cooldown', 0) > 0:
                     obs['bounce_cooldown'] -= 1
@@ -130,8 +148,8 @@ def game_loop() -> None:
                         obs['current_bounce_vy'] = min(nv, OBS_BOUNCE_VY_MIN)
                         obs['bounce_cooldown']   = OBS_BOUNCE_COOLDOWN_TICKS
 
-            # ---- P1 landing on top of obstacle (可以站在障礙物上) ----
-            if p1 and p1['active']:
+            # ---- P1 landing on top of obstacle (可以站在障礙物上) ---- (死亡動畫期間跳過碰撞檢查)
+            if not gs.game_state['dying'] and p1 and p1['active']:
                 obs_top = obs['y'] - OBSTACLE_HEIGHT
                 player_bottom = p1['y'] + PLAYER_HEIGHT
                 # previous tick bottom (before this tick's movement)
@@ -174,13 +192,20 @@ def game_loop() -> None:
                         # debug print for visibility
                         print(f"[support] P1 remains on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
                     else:
-                        # side / non-top collision -> game over
+                        # side / non-top collision -> death animation
                         if gs.check_collision(p1, obs):
                             print(f"[hit] P1 collision with obs id={id(obs)} overlap={overlap:.1f} p_bottom={player_bottom:.1f} obs_top={obs_top:.1f}")
-                            gs.game_state['gameOver']       = True
+                            # 進入死亡動畫模式：P1 獲得碰撞物體速度的 1/5，其他物體停止
+                            gs.game_state['dying']  = True
                             gs.game_state['gameOverReason'] = 'P1 hit obstacle'
+                            p1['dying_from_obs']    = obs  # 保存碰撞物體以供動畫期間使用
+                            # 垂直速度取碰撞物體的 vy 的 1/5
+                            p1['vel']               = -10.0
+                            # 同時繼承水平速度 (vx)，讓 P1 在死亡動畫期間水平移動
+                            p1['vx']                = obs.get('vx', 0)/5
+                            p1['standing_on']      = None  # 解除登陸限制
 
-            if not obs.get('scored') and obs['x'] + OBSTACLE_WIDTH < (p1['x'] if p1 else 0):
+            if not gs.game_state['dying'] and not obs.get('scored') and obs['x'] + OBSTACLE_WIDTH < (p1['x'] if p1 else 0):
                 gs.game_state['score'] += 1
                 obs['scored'] = True
 
@@ -189,31 +214,32 @@ def game_loop() -> None:
 
         gs.game_state['obstacles'] = new_obstacles
 
-        # 確保站在障礙物上的玩家跟隨障礙物的垂直運動或失去支撐時掉落
-        for role, player in gs.game_state['players'].items():
-            standing = player.get('standing_on')
-            if not standing:
-                continue
-            # if the obstacle was removed or moved away, clear standing flag
-            if standing not in gs.game_state['obstacles']:
-                player.pop('standing_on', None)
-                continue
-            # check horizontal still overlaps
-            obs = standing
-            obs_top = obs['y'] - OBSTACLE_HEIGHT
-            player_center_x = player['x'] + PLAYER_WIDTH / 2
-            obs_center_x = obs['x'] + OBSTACLE_WIDTH / 2
-            horiz_ok = abs(player_center_x - obs_center_x) <= (OBSTACLE_WIDTH + PLAYER_WIDTH) / 2
-            if not horiz_ok:
-                # no longer supported
-                player.pop('standing_on', None)
-                continue
-            # follow obstacle's vertical position
-            player['y'] = obs_top - PLAYER_HEIGHT
-            # if obstacle has an upward impulse (vy), transfer it to player so they bounce together
-            if obs.get('vy'):
-                player['vel'] = obs['vy']
-                player['isJumping'] = True
+        # 確保站在障礙物上的玩家跟隨障礙物的垂直運動或失去支撐時掉落（死亡動畫期間跳過）
+        if not gs.game_state['dying']:
+            for role, player in gs.game_state['players'].items():
+                standing = player.get('standing_on')
+                if not standing:
+                    continue
+                # if the obstacle was removed or moved away, clear standing flag
+                if standing not in gs.game_state['obstacles']:
+                    player.pop('standing_on', None)
+                    continue
+                # check horizontal still overlaps
+                obs = standing
+                obs_top = obs['y'] - OBSTACLE_HEIGHT
+                player_center_x = player['x'] + PLAYER_WIDTH / 2
+                obs_center_x = obs['x'] + OBSTACLE_WIDTH / 2
+                horiz_ok = abs(player_center_x - obs_center_x) <= (OBSTACLE_WIDTH + PLAYER_WIDTH) / 2
+                if not horiz_ok:
+                    # no longer supported
+                    player.pop('standing_on', None)
+                    continue
+                # follow obstacle's vertical position
+                player['y'] = obs_top - PLAYER_HEIGHT
+                # if obstacle has an upward impulse (vy), transfer it to player so they bounce together
+                if obs.get('vy'):
+                    player['vel'] = obs['vy']
+                    player['isJumping'] = True
 
         # ── 5. 生成新障礙物 ─────────────────────────────────
         spawn_t += 1

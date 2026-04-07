@@ -105,6 +105,9 @@ def register(socketio) -> None:
         player = gs.game_state['players'].get(role)
         if not player or not player['active'] or gs.game_state['gameOver']:
             return
+        # If death animation running, ignore input
+        if gs.game_state.get('dying'):
+            return
 
         gt        = gs.ground_top()
         on_ground = player['y'] >= gt - 1
@@ -130,6 +133,9 @@ def register(socketio) -> None:
         player = gs.game_state['players'].get(2)
         if not player or not player['active'] or gs.game_state['gameOver']:
             return
+        # Ignore inputs during dying animation
+        if gs.game_state.get('dying'):
+            return
 
         gt = gs.ground_top()
         if player['y'] < gt - 1 or player.get('skillLocked'):
@@ -150,6 +156,9 @@ def register(socketio) -> None:
             return
         player = gs.game_state['players'].get(2)
         if not player or not player['active'] or gs.game_state['gameOver']:
+            return
+        # Ignore inputs during dying animation
+        if gs.game_state.get('dying'):
             return
 
         gt = gs.ground_top()

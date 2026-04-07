@@ -17,7 +17,9 @@ const Input = (() => {
             // P1（非 P2）：按下即跳
             if (Network.assigned !== 0 && Network.assigned !== 2) {
                 const state = Network.latestState;
-                if (!state || state.gameOver) { Network.reset(); return; }
+                if (!state) { return; }
+                if (state.gameOver) { Network.reset(); return; }
+                if (state.dying) { return; }
                 Network.jump(Network.assigned);
             }
         }, { passive: false });
@@ -29,7 +31,9 @@ const Input = (() => {
             // P2：鬆開時判斷上 / 下滑
             if (Network.assigned !== 2) return;
             const state = Network.latestState;
-            if (!state || state.gameOver) { Network.reset(); return; }
+            if (!state) return;
+            if (state.gameOver) { Network.reset(); return; }
+            if (state.dying) return;
             const dx = e.clientX - pointerStartX;
             const dy = e.clientY - pointerStartY;
             if (Math.abs(dy) > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
@@ -43,7 +47,9 @@ const Input = (() => {
             if (e.code === 'Space' && Network.assigned !== 0 && Network.assigned !== 2) {
                 e.preventDefault();
                 const state = Network.latestState;
-                if (!state || state.gameOver) { Network.reset(); return; }
+                if (!state) { return; }
+                if (state.gameOver) { Network.reset(); return; }
+                if (state.dying) return;
                 Network.jump(Network.assigned);
             }
         });
