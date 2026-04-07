@@ -6,7 +6,6 @@ from flask_socketio import SocketIO, emit
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('FLASK_SECRET', 'dev-secret')
-app.jinja_env.globals['DEBUG'] = os.environ.get('DEBUG', 'True').lower() in ('true', '1', 'yes')
 socketio = SocketIO(app, cors_allowed_origins='*')
 
 # ============================================================
