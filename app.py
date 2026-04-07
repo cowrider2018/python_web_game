@@ -193,8 +193,19 @@ def on_connect():
 @socketio.on('disconnect')
 def on_disconnect():
     sid  = request.sid
+    # remove sid -> slot mapping
     slot = sid_to_slot.pop(sid, None)
     role_map.pop(sid, None)
+
+    # If this sid belonged to an occupied slot, free the slot (treat refresh as leave)
+    if slot:
+        # clear owner by client_id (ensure slot is freed)
+        slot_owners[slot] = None
+        # stop the game (automatic exit when a player disconnects)
+        game_state['gameOver'] = True
+        game_state['gameOverReason'] = 'player disconnected'
+        print(f"[socket] player in slot {slot} disconnected - game stopped and slot cleared")
+
     occupied = sum(1 for v in slot_owners.values() if v is not None)
     socketio.emit('state', game_state)
     socketio.emit('player_count', {'count': occupied})
