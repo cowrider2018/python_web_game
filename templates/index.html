@@ -129,12 +129,41 @@
     // ============================================================
     const SWIPE_THRESHOLD = 30;
     let touchStartX = 0, touchStartY = 0;
+    // Pointer-based unified input
+    let pointerStartX = 0, pointerStartY = 0;
+    let lastPointerTime = 0;
+    let pointerDown = false;
 
-    canvas.addEventListener('click', () => {
-        if (assigned === 0 || assigned === 2) return;
+    // 使用 Pointer 事件統一處理滑鼠與觸控行為
+    canvas.addEventListener('pointerdown', e => {
+        e.preventDefault();
+        lastPointerTime = Date.now();
+        pointerDown = true;
+        pointerStartX = e.clientX;
+        pointerStartY = e.clientY;
+        try { canvas.setPointerCapture && canvas.setPointerCapture(e.pointerId); } catch(_) {}
+
+        // P1: 按下即跳（非 P2）
+        if (assigned !== 0 && assigned !== 2) {
+            if (!latestState || latestState.gameOver) { socket.emit('request_reset'); return; }
+            socket.emit('jump', { role: assigned });
+        }
+    }, { passive: false });
+
+    canvas.addEventListener('pointerup', e => {
+        e.preventDefault();
+        pointerDown = false;
+        try { canvas.releasePointerCapture && canvas.releasePointerCapture(e.pointerId); } catch(_) {}
+
+        // P2: pointer up 判斷為上/下滑
+        if (assigned !== 2) return;
         if (!latestState || latestState.gameOver) { socket.emit('request_reset'); return; }
-        socket.emit('jump', { role: assigned });
-    });
+        const dx = e.clientX - pointerStartX;
+        const dy = e.clientY - pointerStartY;
+        if (Math.abs(dy) > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+            socket.emit(dy < 0 ? 'swipe_up' : 'swipe_down', {});
+        }
+    }, { passive: false });
 
     // P2：觸控上滑 / 下滑
     canvas.addEventListener('touchstart', e => {
