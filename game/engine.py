@@ -83,17 +83,21 @@ def game_loop() -> None:
                     if player['upskill_spawn_tick'] == P2_UPSKILL_SPAWN_TICK:
                         player['upskill_spawn_tick'] = -1
                         fw, fh = OBSTACLE_SIZES.get('fire', (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
-                        obs_x = player['x'] + PLAYER_WIDTH[role] // 2 - fw // 2
-                        obs_y = max(0, player['y'] - fh - 5)
+                        obs_x = player['x'] + PLAYER_WIDTH[role] * 4 // 5 - fw // 2
+                        # Place fireball vertically centered on the player (not far above)
+                        obs_y = int(player['y'] + PLAYER_HEIGHT[role] * 4 // 5 + fh // 2)
+                        # clamp inside canvas
+                        obs_y = max(fh, min(obs_y, CANVAS_HEIGHT))
                         gs.game_state['obstacles'].append({
                             'x':                 obs_x,
                             'y':                 obs_y,
                             'scored':            False,
                             'jumping':           True,
-                            'vy':                OBS_BOUNCE_VY_START,
-                            'vx':                OBSTACLE_SPEED + P2_UPSKILL_FIREBALL_VX,  # 火球額外水平速度
+                            'vy':                P2_UPSKILL_FIREBALL_VY_START,
+                            # 火球改為面向右側，並使用獨立初速，不再受一般障礙速度影響
+                            'vx':                P2_UPSKILL_FIREBALL_VX,
                             'bounce_cooldown':   0,
-                            'current_bounce_vy': OBS_BOUNCE_VY_START,
+                            'current_bounce_vy': P2_UPSKILL_FIREBALL_VY_START,
                             'is_fireball':       True,  # 標記為火球（不可踩）
                             'type':              'fire',
                             'w':                 fw,
@@ -149,12 +153,16 @@ def game_loop() -> None:
         for obs in gs.game_state['obstacles']:
             ow, oh = _obs_size(obs)
             # 使用障礙物自身的 vx（如有），否則用預設速度；火球(vx=OBSTACLE_SPEED+P2_UPSKILL_FIREBALL_VX)
-            obs['x'] -= obs.get('vx', OBSTACLE_SPEED)
+            # 移動：一般障礙向左移動（x 減少），火球向右移動（x 增加）且使用自己的初速
+            if obs.get('is_fireball'):
+                obs['x'] += obs.get('vx', P2_UPSKILL_FIREBALL_VX)
+            else:
+                obs['x'] -= obs.get('vx', OBSTACLE_SPEED)
             if obs.get('jumping'):
                 if obs.get('bounce_cooldown', 0) > 0:
                     obs['bounce_cooldown'] -= 1
                     if obs['bounce_cooldown'] <= 0:
-                        obs['vy'] = obs.get('current_bounce_vy', OBS_BOUNCE_VY_START)
+                        obs['vy'] = obs.get('current_bounce_vy', P2_UPSKILL_FIREBALL_VY_START)
                 else:
                     obs['vy'] += GRAVITY
                     obs['y']  += obs['vy']
