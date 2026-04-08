@@ -220,14 +220,57 @@ def game_loop() -> None:
                         # side / non-top collision -> death animation
                         if gs.check_collision(p1, obs):
                             print(f"[hit] P1 collision with obs id={id(obs)} overlap={overlap:.1f} p_bottom={player_bottom:.1f} obs_top={obs_top:.1f}")
-                            # 進入死亡動畫模式：P1 獲得碰撞物體速度的 1/5，其他物體停止
+                            # 進入死亡動畫模式：計算初速度使 P1 飛到 P2 身上
                             gs.game_state['dying']  = True
                             gs.game_state['gameOverReason'] = 'P1 hit obstacle'
                             p1['dying_from_obs']    = obs  # 保存碰撞物體以供動畫期間使用
-                            # 垂直速度取碰撞物體的 vy 的 1/5
-                            p1['vel']               = -10.0
-                            # 同時繼承水平速度 (vx)，讓 P1 在死亡動畫期間水平移動
-                            p1['vx']                = obs.get('vx', 0)/5
+
+                            # 參考公式：由已知水平速度與重力，反算所需初始垂直速度
+                            def _get_jump_params(start_pos, target_pos, g, vx):
+                                x1, y1 = start_pos
+                                x2, y2 = target_pos
+                                dx = x2 - x1
+                                dy = y2 - y1
+                                # 避免除以零
+                                if vx == 0:
+                                    return None
+                                t = dx / vx
+                                # 若飛行時間非正，則無法用此 vx 到達
+                                if t <= 0:
+                                    return None
+                                vy = (dy - 0.5 * g * (t**2)) / t
+                                return vx, vy
+
+                            # 起點、終點採中心點
+                            start_x = p1['x'] + PLAYER_WIDTH[1] / 2
+                            start_y = p1['y'] + PLAYER_HEIGHT[1] / 2
+                            p2 = gs.game_state['players'].get(2)
+                            if p2 and p2.get('active'):
+                                target_x = p2['x'] + PLAYER_WIDTH[2] / 2
+                                target_y = p2['y'] + PLAYER_HEIGHT[2] / 2
+                            else:
+                                # 若 P2 不存在，則以畫面中間為目標
+                                target_x = CANVAS_WIDTH / 2
+                                target_y = gs.ground_top(1)  # 站在地上
+
+                            raw_vx = obs.get('vx', 0)
+                            # 轉換為世界座標的 vx（右為正）
+                            if obs.get('is_fireball'):
+                                world_vx = raw_vx
+                            else:
+                                world_vx = -raw_vx
+
+                            params = _get_jump_params((start_x, start_y), (target_x, target_y), GRAVITY, world_vx)
+                            if params is None:
+                                # fallback: 使用預設行為（向上丟出）以避免數學錯誤
+                                p1['vel'] = -10.0
+                                p1['vx']  = obs.get('vx', 0) / 5
+                            else:
+                                vx_used, vy_used = params
+                                # engine 的死亡移動使用 p1['x'] -= p1['vx']，因此存入的 vx 需取負
+                                p1['vx']  = -vx_used
+                                p1['vel'] = vy_used
+
                             p1['standing_on']      = None  # 解除登陸限制
 
             if not gs.game_state['dying'] and not obs.get('scored') and obs['x'] + ow < (p1['x'] if p1 else 0):
