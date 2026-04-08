@@ -78,8 +78,9 @@ const Renderer = (() => {
         }
         
         const img = _spriteImg(spriteName);
-        const w = obs.w || cfg.OBSTACLE_WIDTH;
-        const h = obs.h || cfg.OBSTACLE_HEIGHT;
+        const _obsSize = cfg.OBSTACLE_SIZES && cfg.OBSTACLE_SIZES[obs.type || 'stone'];
+        const w = obs.w || (_obsSize && _obsSize[0]) || 64;
+        const h = obs.h || (_obsSize && _obsSize[1]) || 64;
         // apply fade alpha when server marks obstacle as fading
         let prevAlpha = null;
         if (obs.fading && obs.fade_ticks_total && obs.fade_ticks_remaining !== undefined) {

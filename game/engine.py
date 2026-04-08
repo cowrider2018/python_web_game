@@ -9,14 +9,15 @@ _socketio = None
 
 def _obs_size(obs):
     """Return (w,h) for an obstacle from its dict or OBSTACLE_SIZES mapping."""
+    _default = OBSTACLE_SIZES.get(OBSTACLE_DEFAULT_TYPE, (64, 64))
     if not obs:
-        return (OBSTACLE_WIDTH, OBSTACLE_HEIGHT)
+        return _default
     if 'w' in obs and 'h' in obs:
         return obs['w'], obs['h']
     t = obs.get('type') if isinstance(obs, dict) else None
     if not t:
         t = OBSTACLE_DEFAULT_TYPE
-    return OBSTACLE_SIZES.get(t, (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+    return OBSTACLE_SIZES.get(t, _default)
 
 
 def init(socketio_instance) -> None:
@@ -114,7 +115,7 @@ def game_loop() -> None:
                     player['upskill_spawn_tick'] += 1
                     if player['upskill_spawn_tick'] == P2_UPSKILL_SPAWN_TICK:
                         player['upskill_spawn_tick'] = -1
-                        fw, fh = OBSTACLE_SIZES.get('fire', (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+                        fw, fh = OBSTACLE_SIZES['fire']
                         obs_x = player['x'] + PLAYER_WIDTH[role] * 4 // 5 - fw // 2
                         # Place fireball vertically centered on the player (not far above)
                         obs_y = int(player['y'] + PLAYER_HEIGHT[role] * 4 // 5 + fh // 2)
@@ -386,7 +387,7 @@ def game_loop() -> None:
         spawn_t += 1
         if spawn_t >= SPAWN_INTERVAL_TICKS:
             spawn_t = 0
-            sw, sh = OBSTACLE_SIZES.get('stone', (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+            sw, sh = OBSTACLE_SIZES['stone']
             gs.game_state['obstacles'].append({
                 'x':                 CANVAS_WIDTH,
                 'y':                 GROUND_Y,

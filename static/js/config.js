@@ -7,8 +7,7 @@ const GameConfig = {
     GROUND_Y:        560,
     PLAYER_WIDTH:    [0, 64, 128],
     PLAYER_HEIGHT:   [0, 64, 128],
-    OBSTACLE_WIDTH:  60,
-    OBSTACLE_HEIGHT: 60,
+    OBSTACLE_SIZES:  { stone: [64, 64], fire: [64, 64] },
     SERVER_FPS:      120,
 
     _ready:     false,
@@ -36,8 +35,7 @@ const GameConfig = {
                 this.GROUND_Y        = cfg.ground_y        || (this.CANVAS_HEIGHT - 40);
                 this.PLAYER_WIDTH    = cfg.player_width    || this.PLAYER_WIDTH;
                 this.PLAYER_HEIGHT   = cfg.player_height   || this.PLAYER_HEIGHT;
-                this.OBSTACLE_WIDTH  = cfg.obstacle_width  || this.OBSTACLE_WIDTH;
-                this.OBSTACLE_HEIGHT = cfg.obstacle_height || this.OBSTACLE_HEIGHT;
+                if (cfg.obstacle_sizes) this.OBSTACLE_SIZES = cfg.obstacle_sizes;
                 this.SERVER_FPS      = cfg.server_fps      || this.SERVER_FPS;
                 this._resolve();
             })

@@ -28,15 +28,13 @@ P2_DOWNSKILL_LAND_IMPULSE = -9.0   # downskill 落地時給地面障礙物的向
 GROUND_ANIM_VY_START      = -5.0   # 地面外觀初始向上速度
 
 # ---- 障礙物 ----
-OBSTACLE_WIDTH        = 64
-OBSTACLE_HEIGHT       = 64
 OBSTACLE_SPEED        = 5     # 每 TICK 水平移動像素
 SPAWN_INTERVAL_TICKS  = 300   # 每隔幾 TICK 生成一個障礙物
 
 # 支援多種障礙物尺寸（type -> (w,h)），可擴充更多種類
 OBSTACLE_SIZES = {
-    'stone': (OBSTACLE_WIDTH, OBSTACLE_HEIGHT),
-    'fire':  (48, 48),
+    'stone': (64, 64),
+    'fire':  (64, 64),
 }
 OBSTACLE_DEFAULT_TYPE = 'stone'
 

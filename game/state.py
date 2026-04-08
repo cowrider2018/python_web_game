@@ -4,7 +4,7 @@
 from game.constants import (
     GROUND_Y, PLAYER_HEIGHT, PLAYER_WIDTH, CANVAS_WIDTH,
     P1_SPRITE, P2_SPRITE_NORMAL, SLOT_NAMES,
-    OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_SIZES, OBSTACLE_DEFAULT_TYPE,
+    OBSTACLE_SIZES, OBSTACLE_DEFAULT_TYPE,
 )
 
 # ---- 連線 / 槽位管理 ----
@@ -82,7 +82,7 @@ def check_collision(player: dict, obs: dict, role: int = 1) -> bool:
         ow, oh = obs['w'], obs['h']
     else:
         t = obs.get('type', OBSTACLE_DEFAULT_TYPE)
-        ow, oh = OBSTACLE_SIZES.get(t, (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+        ow, oh = OBSTACLE_SIZES.get(t, OBSTACLE_SIZES.get(OBSTACLE_DEFAULT_TYPE, (64, 64)))
     obs_top = obs['y'] - oh
     return (
         player['x'] + PLAYER_WIDTH[role]  > obs['x'] and
