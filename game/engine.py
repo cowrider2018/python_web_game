@@ -48,7 +48,7 @@ def game_loop() -> None:
             sio.emit('state', gs.game_state)
             continue
 
-        # 死亡動畫模式：P1 掉落至掉出畫面，障礙物繼續運動
+        # 死亡動畫模式：P1 掉落至 P2 或掉出畫面，障礙物繼續運動
         if gs.game_state['dying']:
             p1 = gs.game_state['players'].get(1)
             if p1 and p1['active']:
@@ -57,9 +57,40 @@ def game_loop() -> None:
                 p1['y']   += p1['vel']
                 # 繼承水平速度（來自碰撞的障礙物 vx），讓 P1 水平移動
                 p1['x']  -= p1.get('vx', 0)
-                # P1 掉出畫面後設置 gameOver
-                if p1['y'] > CANVAS_HEIGHT:
-                    gs.game_state['gameOver'] = True
+
+                # 若 P2 在場且 P1 未被隱藏，檢查是否接觸到 P2
+                p2 = gs.game_state['players'].get(2)
+                if p2 and p2.get('active') and not p1.get('hidden'):
+                    # AABB 碰撞檢查（使用各自的寬高）
+                    p1_left = p1['x']
+                    p1_right = p1['x'] + PLAYER_WIDTH[1]
+                    p1_top = p1['y']
+                    p1_bottom = p1['y'] + PLAYER_HEIGHT[1]
+
+                    p2_left = p2['x']
+                    p2_right = p2['x'] + PLAYER_WIDTH[2]
+                    p2_top = p2['y']
+                    p2_bottom = p2['y'] + PLAYER_HEIGHT[2]
+
+                    horiz = (p1_right > p2_left) and (p1_left < p2_right)
+                    vert = (p1_bottom > p2_top) and (p1_top < p2_bottom)
+                    if horiz and vert:
+                        # 觸碰到 P2：觸發 P2 的 eat 動畫、隱藏 P1，並在動畫結束後 0.5 秒結束 dying
+                        gs.apply_sprite_schedule(p2, P2_SKILL_SETS['eat'])
+                        p1['hidden'] = True
+                        # 停止 P1 的移動
+                        p1['vel'] = 0.0
+                        p1['vx'] = 0.0
+                        # schedule dying 結束的 tick（0.5 秒後）
+                        gs.game_state['dying_end_tick'] = gs.tick_count + int(SERVER_FPS * 0.5)
+
+                # 若已經排定 dying 結束時刻，則以該條件結束；否則維持原本掉出畫面判定
+                if gs.game_state.get('dying_end_tick') is not None:
+                    if gs.tick_count >= gs.game_state['dying_end_tick']:
+                        gs.game_state['gameOver'] = True
+                else:
+                    if p1['y'] > CANVAS_HEIGHT:
+                        gs.game_state['gameOver'] = True
             # 在死亡動畫期間，障礙物仍然移動和彈跳，但跳過P1碰撞檢查
             # 直接進入 obstacle 物理部分，稍後會跳過 P1 碰撞檢查
 

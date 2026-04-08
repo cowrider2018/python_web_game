@@ -116,6 +116,7 @@ const Renderer = (() => {
                     for (const role in state.players) {
                         const player = state.players[role];
                         if (!player.active) continue;
+                        if (player.hidden) continue;
                         _drawPlayer(ctx, player, role);
                         ctx.fillStyle = Number(role) === Network.assigned ? 'yellow' : 'white';
                         ctx.font = '12px Arial';

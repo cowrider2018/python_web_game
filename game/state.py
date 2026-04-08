@@ -100,6 +100,8 @@ def reset_game() -> None:
     game_state['dying']             = False  # 重置死亡動畫狀態，恢復正常物理
     game_state['gameOverReason']    = ''
     game_state['ground_animation']  = {'offset': 0.0, 'vy': 0.0}
+    # 清除任何 dying 結束計時
+    game_state.pop('dying_end_tick', None)
 
 
 def _parse_role(data) -> int | None:

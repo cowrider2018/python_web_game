@@ -61,6 +61,10 @@ P2_SKILL_SETS = {
         'sequence': [P2_SPRITE_SQUAT],
         'frames':   [80],
     },
+    'eat': {
+        'sequence': [P2_SPRITE_ROAR, P2_SPRITE_SQUAT],
+        'frames':   [15,              30],
+    },
 }
 DEFAULT_P2_SKILL = 'upskill'
 
