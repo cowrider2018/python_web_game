@@ -38,22 +38,29 @@ const Renderer = (() => {
         return SPRITE_MAP[name] || SPRITE_MAP['player_1.png'];
     }
 
+    // Helper: draw an image flipped horizontally around its center
+    function _drawFlippedImage(ctx, img, x, y, w, h) {
+        ctx.save();
+        ctx.translate(x + w / 2, y + h / 2);
+        ctx.scale(-1, 1);
+        ctx.drawImage(img, -w / 2, -h / 2, w, h);
+        ctx.restore();
+    }
+
     function _drawPlayer(ctx, player, role) {
         const cfg  = GameConfig;
         const name = player.sprite || (Number(role) === 2 ? 'player_2_normal.png' : 'player_1.png');
         const img  = _spriteImg(name);
-        const s    = cfg.PLAYER_WIDTH[role];
+        // Use role-specific logical and sprite sizes so rendering is dynamic
+        const logicalW = cfg.PLAYER_WIDTH[role];
+        const logicalH = cfg.PLAYER_HEIGHT[role];
+        const spriteW  = cfg.PLAYER_WIDTH[role];
+        const spriteH  = cfg.PLAYER_HEIGHT[role];
 
-        if (Number(role) === 2) {
-            const s2 = s * 3;
-            ctx.drawImage(img, player.x + (s - s2) / 2, player.y + (s - s2), s2, s2);
-        } else {
-            ctx.save();
-            ctx.translate(player.x + s / 2, player.y + s / 2);
-            ctx.scale(-1, 1);
-            ctx.drawImage(img, -s / 2, -s / 2, s, s);
-            ctx.restore();
-        }
+        // center the sprite horizontally on the logical player box and align bottoms
+        const drawX = player.x + (logicalW - spriteW) / 2;
+        const drawY = player.y + (logicalH - spriteH);
+        _drawFlippedImage(ctx, img, drawX, drawY, spriteW, spriteH);
     }
 
     function _drawObstacle(ctx, obs, gameTime) {
@@ -112,11 +119,7 @@ const Renderer = (() => {
                         _drawPlayer(ctx, player, role);
                         ctx.fillStyle = Number(role) === Network.assigned ? 'yellow' : 'white';
                         ctx.font = '12px Arial';
-                        if (Number(role) === 2) {
-                            ctx.fillText(player.name || `P${role}`, player.x + 5, player.y - cfg.PLAYER_HEIGHT[2] * 3);
-                        } else {
-                            ctx.fillText(player.name || `P${role}`, player.x + 5, player.y - cfg.PLAYER_HEIGHT[1]);
-                        }
+                        ctx.fillText(player.name || `P${role}`, player.x+cfg.PLAYER_WIDTH[role]/2, player.y - cfg.PLAYER_HEIGHT[role]);
                     }
                 }
 

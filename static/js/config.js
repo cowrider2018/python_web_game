@@ -5,8 +5,8 @@ const GameConfig = {
     CANVAS_WIDTH:    800,
     CANVAS_HEIGHT:   600,
     GROUND_Y:        560,
-    PLAYER_WIDTH:    [0, 40, 40],      // Array: [unused, P1_width, P2_width]
-    PLAYER_HEIGHT:   [0, 40, 40],      // Array: [unused, P1_height, P2_height]
+    PLAYER_WIDTH:    [0, 64, 128],
+    PLAYER_HEIGHT:   [0, 64, 128],
     OBSTACLE_WIDTH:  60,
     OBSTACLE_HEIGHT: 60,
     SERVER_FPS:      120,

@@ -109,7 +109,7 @@ def register(socketio) -> None:
         if gs.game_state.get('dying'):
             return
 
-        gt        = gs.ground_top()
+        gt        = gs.ground_top(role)
         on_ground = player['y'] >= gt - 1
 
         if on_ground:
@@ -137,7 +137,7 @@ def register(socketio) -> None:
         if gs.game_state.get('dying'):
             return
 
-        gt = gs.ground_top()
+        gt = gs.ground_top(2)
         if player['y'] < gt - 1 or player.get('skillLocked'):
             return
 
@@ -161,7 +161,7 @@ def register(socketio) -> None:
         if gs.game_state.get('dying'):
             return
 
-        gt = gs.ground_top()
+        gt = gs.ground_top(2)
         if player['y'] < gt - 1 or player.get('skillLocked'):
             return
 

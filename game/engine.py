@@ -63,8 +63,6 @@ def game_loop() -> None:
             # 在死亡動畫期間，障礙物仍然移動和彈跳，但跳過P1碰撞檢查
             # 直接進入 obstacle 物理部分，稍後會跳過 P1 碰撞檢查
 
-        gt = gs.ground_top()
-
         # ── 1. 玩家物理 ─────────────────────────────────────
         for role, player in gs.game_state['players'].items():
             if not player['active']:
@@ -73,7 +71,9 @@ def game_loop() -> None:
             if gs.game_state['dying'] and role == 1:
                 continue
 
-            if player['y'] < gt or player['vel'] != 0.0:
+            gt_role = gs.ground_top(role)
+
+            if player['y'] < gt_role or player['vel'] != 0.0:
                 player['vel'] += GRAVITY
                 player['y']   += player['vel']
 
@@ -102,8 +102,8 @@ def game_loop() -> None:
                         print(f"[upskill] fireball spawned tick={gs.tick_count}")
 
                 # 落地
-                if player['y'] >= gt:
-                    player['y']         = gt
+                if player['y'] >= gt_role:
+                    player['y']         = gt_role
                     player['vel']       = 0.0
                     was_jumping         = player.get('isJumping', False)
                     player['isJumping'] = False

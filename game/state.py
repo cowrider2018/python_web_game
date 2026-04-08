@@ -28,9 +28,9 @@ tick_count: int = 0
 
 # ---- 輔助函式 ----
 
-def ground_top() -> float:
-    # Return ground top relative to P1 (role 1)
-    return GROUND_Y - PLAYER_HEIGHT[1]
+def ground_top(role: int = 1) -> float:
+    """Return ground-top y for a given role (accounts for per-role heights)."""
+    return GROUND_Y - PLAYER_HEIGHT[role]
 
 
 def rebuild_players() -> None:
@@ -39,10 +39,16 @@ def rebuild_players() -> None:
     for slot in (1, 2):
         owner  = slot_owners.get(slot)
         active = owner is not None
-        x = 50 if slot == 1 else (CANVAS_WIDTH - 50 - PLAYER_WIDTH[slot])
+        # P2 at far-left, P1 slightly left-of-center
+        if slot == 2:
+            x = 10
+        elif slot == 1:
+            x = int(CANVAS_WIDTH / 2) - PLAYER_WIDTH[1] - 20
+        else:
+            x = 50
         new_players[slot] = {
             'x':                     x,
-            'y':                     ground_top(),
+            'y':                     ground_top(slot),
             'vel':                   0.0,
             'active':                active,
             'name':                  SLOT_NAMES.get(slot, f'P{slot}'),
