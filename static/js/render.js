@@ -60,7 +60,8 @@ const Renderer = (() => {
         // center the sprite horizontally on the logical player box and align bottoms
         const drawX = player.x + (logicalW - spriteW) / 2;
         const drawY = player.y + (logicalH - spriteH);
-        _drawFlippedImage(ctx, img, drawX, drawY, spriteW, spriteH);
+        // Draw without horizontal flip
+        ctx.drawImage(img, drawX, drawY, spriteW, spriteH);
     }
 
     function _drawObstacle(ctx, obs, gameTime) {
