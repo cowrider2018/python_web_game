@@ -7,6 +7,9 @@ const Renderer = (() => {
         'player_2_normal.png',
         'player_2_roar.png',
         'player_2_squat.png',
+        'stone.png',
+        'fire_1.png',
+        'fire_2.png',
     ];
     const SPRITE_MAP = {};
     let _loadedCount = 0;
@@ -53,11 +56,37 @@ const Renderer = (() => {
         }
     }
 
-    function _drawObstacle(ctx, obs) {
+    function _drawObstacle(ctx, obs, gameTime) {
         const cfg = GameConfig;
-        // 火球用紅色，普通障礙物用棕色
-        ctx.fillStyle = obs.is_fireball ? '#ff2020' : '#8b4513';
-        ctx.fillRect(obs.x, obs.y - cfg.OBSTACLE_HEIGHT, cfg.OBSTACLE_WIDTH, cfg.OBSTACLE_HEIGHT);
+        let spriteName;
+        
+        if (obs.is_fireball) {
+            // 火球每 30 ticks 轮换一次（在 120 FPS 下，约 0.25 秒；可调为 0.5 秒 = 60 ticks）
+            // 使用 gameTime（ms）或 obs 外部提供的 tick 来决定
+            const fireFrame = Math.floor((gameTime || Date.now()) / 500) % 2;  // 每 0.5 秒轮换
+            spriteName = fireFrame === 0 ? 'fire_1.png' : 'fire_2.png';
+        } else {
+            spriteName = 'stone.png';
+        }
+        
+        const img = _spriteImg(spriteName);
+        const w = cfg.OBSTACLE_WIDTH;
+        const h = cfg.OBSTACLE_HEIGHT;
+        if (obs.is_fireball) {
+            // 旋轉效果（僅貼圖層面）：每 0.25 秒轉 90 度
+            const rotFrame = Math.floor((gameTime || Date.now()) / 250) % 4;
+            const angle = rotFrame * (Math.PI / 2);
+            ctx.save();
+            // translate to sprite center
+            const cx = obs.x + w / 2;
+            const cy = obs.y - h / 2;
+            ctx.translate(cx, cy);
+            ctx.rotate(angle);
+            ctx.drawImage(img, -w / 2, -h / 2, w, h);
+            ctx.restore();
+        } else {
+            ctx.drawImage(img, obs.x, obs.y - h, w, h);
+        }
     }
 
     function startLoop(canvas, scoreDisplay) {
@@ -66,6 +95,7 @@ const Renderer = (() => {
         function update() {
             const cfg   = GameConfig;
             const state = Network.latestState;
+            const gameTime = Date.now();  // 用於火球輪換
             ctx.clearRect(0, 0, cfg.CANVAS_WIDTH, cfg.CANVAS_HEIGHT);
 
             // 地面
@@ -91,7 +121,7 @@ const Renderer = (() => {
                 }
 
                 // 障礙物
-                if (state.obstacles) state.obstacles.forEach(obs => _drawObstacle(ctx, obs));
+                if (state.obstacles) state.obstacles.forEach(obs => _drawObstacle(ctx, obs, gameTime));
 
                 // 分數
                 scoreDisplay.innerText = `Score: ${state.score}`;
