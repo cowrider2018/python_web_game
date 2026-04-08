@@ -110,12 +110,14 @@ def register(socketio) -> None:
             return
 
         gt        = gs.ground_top(role)
-        on_ground = player['y'] >= gt - 1
+        # Can jump if on ground OR standing on an obstacle
+        on_ground = player['y'] >= gt - 1 or player.get('standing_on') is not None
 
         if on_ground:
             player['vel']       = P1_JUMP_VY
             player['isJumping'] = True
             player['canDouble'] = True
+            player['standing_on'] = None  # Clear standing state when jumping
             print(f"[jump] role={role} 一段跳")
         elif role == 1 and player.get('canDouble', False):
             player['vel']       = P1_DOUBLE_JUMP_VY
@@ -138,12 +140,15 @@ def register(socketio) -> None:
             return
 
         gt = gs.ground_top(2)
-        if player['y'] < gt - 1 or player.get('skillLocked'):
+        # Allow skill if on ground OR standing on obstacle
+        on_ground_or_obs = player['y'] >= gt - 1 or player.get('standing_on') is not None
+        if not on_ground_or_obs or player.get('skillLocked'):
             return
 
         player['vel']                = P2_UPSKILL_JUMP_VY
         player['isJumping']          = True
         player['skillLocked']        = True
+        player['standing_on'] = None  # Clear standing state when jumping
         player['upskill_spawn_tick'] = 0
         gs.apply_sprite_schedule(player, P2_SKILL_SETS['upskill'])
         print(f"[swipe_up] P2 upskill triggered")
@@ -162,12 +167,15 @@ def register(socketio) -> None:
             return
 
         gt = gs.ground_top(2)
-        if player['y'] < gt - 1 or player.get('skillLocked'):
+        # Allow skill if on ground OR standing on obstacle
+        on_ground_or_obs = player['y'] >= gt - 1 or player.get('standing_on') is not None
+        if not on_ground_or_obs or player.get('skillLocked'):
             return
 
         player['vel']                    = P2_DOWNSKILL_JUMP_VY
         player['isJumping']              = True
         player['skillLocked']            = True
+        player['standing_on'] = None  # Clear standing state when jumping
         player['downskill_pending_land'] = True
         gs.apply_sprite_schedule(player, P2_SKILL_SETS['downskill'])
         print(f"[swipe_down] P2 downskill triggered")
