@@ -114,9 +114,14 @@ const Renderer = (() => {
                         if (!player.active) continue;
                         if (player.hidden) continue;
                         _drawPlayer(ctx, player, role);
-                        ctx.fillStyle = Number(role) === Network.assigned ? 'yellow' : 'white';
                         ctx.font = '12px Arial';
-                        ctx.fillText(player.name || `P${role}`, player.x+cfg.PLAYER_WIDTH[role]/2, player.y - cfg.PLAYER_HEIGHT[role]);
+                        // Only show "YOU" above the currently assigned player
+                        if (Number(role) === Network.assigned) {
+                            ctx.fillStyle = 'yellow';
+                            ctx.textAlign = 'center';
+                            ctx.fillText('YOU', player.x + cfg.PLAYER_WIDTH[role] / 2, player.y - 10);
+                            ctx.textAlign = 'left';
+                        }
                     }
                 }
 
