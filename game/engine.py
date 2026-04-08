@@ -153,10 +153,24 @@ def game_loop() -> None:
                             player['downskill_pending_land'] = False
                             for obs in gs.game_state['obstacles']:
                                 if obs.get('y', 0) >= GROUND_Y - 1:
+                                    # Give upward impulse to obstacles on ground
                                     obs['vy']            = P2_DOWNSKILL_LAND_IMPULSE
                                     obs['jumping']       = True
                                     obs['bounce_cooldown'] = 0
-                                    obs.setdefault('current_bounce_vy', OBS_BOUNCE_VY_START)
+                                    # Special behavior for fireballs: stop horizontal motion and start fading
+                                    if obs.get('is_fireball'):
+                                        # clear bounce state
+                                        obs.pop('current_bounce_vy', None)
+                                        obs.pop('bounce_cooldown', None)
+                                        # stop horizontal movement
+                                        obs['vx'] = 0
+                                        # start fade timer (0.2s)
+                                        fade_ticks = int(SERVER_FPS * 0.2)
+                                        obs['fading'] = True
+                                        obs['fade_ticks_remaining'] = fade_ticks
+                                        obs['fade_ticks_total'] = fade_ticks
+                                    else:
+                                        obs.setdefault('current_bounce_vy', OBS_BOUNCE_VY_START)
                             gs.game_state['ground_animation']['vy'] = GROUND_ANIM_VY_START
                             sio.emit('skill_event', {'skill': 'downskill', 'event': 'land'})
                             print(f"[downskill] land impulse + ground anim tick={gs.tick_count}")
@@ -327,6 +341,13 @@ def game_loop() -> None:
             if not gs.game_state['dying'] and not obs.get('scored') and obs['x'] + ow < (p1['x'] if p1 else 0):
                 gs.game_state['score'] += 1
                 obs['scored'] = True
+
+            # handle fading countdown for obstacles (server-side authoritative)
+            if obs.get('fading'):
+                obs['fade_ticks_remaining'] = max(0, obs.get('fade_ticks_remaining', 0) - 1)
+                if obs['fade_ticks_remaining'] <= 0:
+                    # fully faded -> remove
+                    continue
 
             if obs['x'] + ow > 0:
                 new_obstacles.append(obs)

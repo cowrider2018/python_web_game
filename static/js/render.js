@@ -78,9 +78,17 @@ const Renderer = (() => {
         }
         
         const img = _spriteImg(spriteName);
-        const w = cfg.OBSTACLE_WIDTH;
-        const h = cfg.OBSTACLE_HEIGHT;
+        const w = obs.w || cfg.OBSTACLE_WIDTH;
+        const h = obs.h || cfg.OBSTACLE_HEIGHT;
+        // apply fade alpha when server marks obstacle as fading
+        let prevAlpha = null;
+        if (obs.fading && obs.fade_ticks_total && obs.fade_ticks_remaining !== undefined) {
+            const alpha = Math.max(0, obs.fade_ticks_remaining / obs.fade_ticks_total);
+            prevAlpha = ctx.globalAlpha;
+            ctx.globalAlpha = alpha;
+        }
         ctx.drawImage(img, obs.x, obs.y - h, w, h);
+        if (prevAlpha !== null) ctx.globalAlpha = prevAlpha;
     }
 
     function startLoop(canvas, scoreDisplay) {
