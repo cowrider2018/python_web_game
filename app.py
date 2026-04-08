@@ -44,8 +44,8 @@ def game_config():
         'canvas_width':     CANVAS_WIDTH,
         'canvas_height':    CANVAS_HEIGHT,
         'ground_y':         GROUND_Y,
-        'player_width':     PLAYER_WIDTH,
-        'player_height':    PLAYER_HEIGHT,
+        'player_width':     PLAYER_WIDTH,      # Array: [0, P1_width, P2_width]
+        'player_height':    PLAYER_HEIGHT,     # Array: [0, P1_height, P2_height]
         'obstacle_width':   OBSTACLE_WIDTH,
         'obstacle_height':  OBSTACLE_HEIGHT,
         'server_fps':       SERVER_FPS,

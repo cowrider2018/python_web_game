@@ -11,9 +11,9 @@ CANVAS_WIDTH  = 800
 CANVAS_HEIGHT = 600
 GROUND_Y      = CANVAS_HEIGHT - 40   # 地面底邊 Y
 
-# ---- 玩家 ----
-PLAYER_WIDTH  = 40
-PLAYER_HEIGHT = 40
+# ---- 玩家 (indexed by role: 0=unused, 1=P1, 2=P2) ----
+PLAYER_WIDTH  = [0, 40, 40]      # [unused, P1_width, P2_width]
+PLAYER_HEIGHT = [0, 40, 40]      # [unused, P1_height, P2_height]
 GRAVITY       = 0.6
 
 P1_JUMP_VY        = -15.0   # 一段跳初速（向上為負）

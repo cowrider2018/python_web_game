@@ -70,7 +70,7 @@ def game_loop() -> None:
                     player['upskill_spawn_tick'] += 1
                     if player['upskill_spawn_tick'] == P2_UPSKILL_SPAWN_TICK:
                         player['upskill_spawn_tick'] = -1
-                        obs_x = player['x'] + PLAYER_WIDTH // 2 - OBSTACLE_WIDTH // 2
+                        obs_x = player['x'] + PLAYER_WIDTH[role] // 2 - OBSTACLE_WIDTH // 2
                         obs_y = max(0, player['y'] - OBSTACLE_HEIGHT - 5)
                         gs.game_state['obstacles'].append({
                             'x':                 obs_x,
@@ -151,19 +151,19 @@ def game_loop() -> None:
             # ---- P1 landing on top of obstacle (可以站在障礙物上) ---- (死亡動畫期間跳過碰撞檢查)
             if not gs.game_state['dying'] and p1 and p1['active']:
                 obs_top = obs['y'] - OBSTACLE_HEIGHT
-                player_bottom = p1['y'] + PLAYER_HEIGHT
+                player_bottom = p1['y'] + PLAYER_HEIGHT[1]
                 # previous tick bottom (before this tick's movement)
                 prev_player_bottom = player_bottom - p1.get('vel', 0)
                 # predicted next tick bottom (if needed)
                 next_player_bottom = player_bottom + p1.get('vel', 0)
                 # 更穩健的水平重疊判定：計算水平重疊寬度
                 p_left = p1['x']
-                p_right = p1['x'] + PLAYER_WIDTH
+                p_right = p1['x'] + PLAYER_WIDTH[1]
                 obs_left = obs['x']
                 obs_right = obs['x'] + OBSTACLE_WIDTH
                 overlap = min(p_right, obs_right) - max(p_left, obs_left)
                 # 只要有少量重疊即可視為水平對齊（容許緩衝）
-                horiz_ok = overlap > max(2, PLAYER_WIDTH * 0.2)
+                horiz_ok = overlap > max(2, PLAYER_WIDTH[1] * 0.2)
                 # landing condition:
                 # - falling (vel>0) and horizontal aligned, and
                 # - either we crossed the top this tick (prev_bottom <= obs_top <= player_bottom)
@@ -174,7 +174,7 @@ def game_loop() -> None:
                 # 火球(is_fireball=True)不可踩踏，只有普通障礙物可以
                 if horiz_ok and (crossed_this_tick or will_cross_next) and not obs.get('is_fireball', False):
                     # place player on top of obstacle and sync vertical velocity
-                    p1['y'] = obs_top - PLAYER_HEIGHT
+                    p1['y'] = obs_top - PLAYER_HEIGHT[1]
                     # if obstacle is moving vertically, let player inherit its vy (可一起彈跳)
                     p1['vel'] = obs.get('vy', 0)
                     p1['isJumping'] = False
@@ -185,7 +185,7 @@ def game_loop() -> None:
                     # If player is already standing on this obstacle, maintain support instead of treating as side collision
                     if p1.get('standing_on') is obs:
                         # refresh player's top alignment
-                        p1['y'] = obs_top - PLAYER_HEIGHT
+                        p1['y'] = obs_top - PLAYER_HEIGHT[1]
                         p1['vel'] = obs.get('vy', 0)
                         # still considered standing
                         # small overlap may occur; do not treat as collision
@@ -227,15 +227,15 @@ def game_loop() -> None:
                 # check horizontal still overlaps
                 obs = standing
                 obs_top = obs['y'] - OBSTACLE_HEIGHT
-                player_center_x = player['x'] + PLAYER_WIDTH / 2
+                player_center_x = player['x'] + PLAYER_WIDTH[role] / 2
                 obs_center_x = obs['x'] + OBSTACLE_WIDTH / 2
-                horiz_ok = abs(player_center_x - obs_center_x) <= (OBSTACLE_WIDTH + PLAYER_WIDTH) / 2
+                horiz_ok = abs(player_center_x - obs_center_x) <= (OBSTACLE_WIDTH + PLAYER_WIDTH[role]) / 2
                 if not horiz_ok:
                     # no longer supported
                     player.pop('standing_on', None)
                     continue
                 # follow obstacle's vertical position
-                player['y'] = obs_top - PLAYER_HEIGHT
+                player['y'] = obs_top - PLAYER_HEIGHT[role]
                 # if obstacle has an upward impulse (vy), transfer it to player so they bounce together
                 if obs.get('vy'):
                     player['vel'] = obs['vy']

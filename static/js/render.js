@@ -39,7 +39,7 @@ const Renderer = (() => {
         const cfg  = GameConfig;
         const name = player.sprite || (Number(role) === 2 ? 'player_2_normal.png' : 'player_1.png');
         const img  = _spriteImg(name);
-        const s    = cfg.PLAYER_WIDTH;
+        const s    = cfg.PLAYER_WIDTH[role];
 
         if (Number(role) === 2) {
             const s2 = s * 3;
@@ -82,7 +82,11 @@ const Renderer = (() => {
                         _drawPlayer(ctx, player, role);
                         ctx.fillStyle = Number(role) === Network.assigned ? 'yellow' : 'white';
                         ctx.font = '12px Arial';
-                        ctx.fillText(player.name || `P${role}`, player.x + 5, player.y - 10);
+                        if (Number(role) === 2) {
+                            ctx.fillText(player.name || `P${role}`, player.x + 5, player.y - cfg.PLAYER_HEIGHT[2] * 3);
+                        } else {
+                            ctx.fillText(player.name || `P${role}`, player.x + 5, player.y - cfg.PLAYER_HEIGHT[1]);
+                        }
                     }
                 }
 

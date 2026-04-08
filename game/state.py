@@ -29,7 +29,8 @@ tick_count: int = 0
 # ---- 輔助函式 ----
 
 def ground_top() -> float:
-    return GROUND_Y - PLAYER_HEIGHT
+    # Return ground top relative to P1 (role 1)
+    return GROUND_Y - PLAYER_HEIGHT[1]
 
 
 def rebuild_players() -> None:
@@ -38,7 +39,7 @@ def rebuild_players() -> None:
     for slot in (1, 2):
         owner  = slot_owners.get(slot)
         active = owner is not None
-        x = 50 if slot == 1 else (CANVAS_WIDTH - 50 - PLAYER_WIDTH)
+        x = 50 if slot == 1 else (CANVAS_WIDTH - 50 - PLAYER_WIDTH[slot])
         new_players[slot] = {
             'x':                     x,
             'y':                     ground_top(),
@@ -68,13 +69,13 @@ def apply_sprite_schedule(player: dict, schedule: dict) -> None:
         player['sprite'] = player['sprite_schedule'][0]['sprite']
 
 
-def check_collision(player: dict, obs: dict) -> bool:
+def check_collision(player: dict, obs: dict, role: int = 1) -> bool:
     """AABB 碰撞：player.y 為左上角，obs.y 為底邊。"""
     obs_top = obs['y'] - OBSTACLE_HEIGHT
     return (
-        player['x'] + PLAYER_WIDTH  > obs['x'] and
+        player['x'] + PLAYER_WIDTH[role]  > obs['x'] and
         player['x']                 < obs['x'] + OBSTACLE_WIDTH and
-        player['y'] + PLAYER_HEIGHT > obs_top and
+        player['y'] + PLAYER_HEIGHT[role] > obs_top and
         player['y']                 < obs['y']
     )
 
