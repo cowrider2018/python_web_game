@@ -80,21 +80,7 @@ const Renderer = (() => {
         const img = _spriteImg(spriteName);
         const w = cfg.OBSTACLE_WIDTH;
         const h = cfg.OBSTACLE_HEIGHT;
-        if (obs.is_fireball) {
-            // 旋轉效果（僅貼圖層面）：每 0.25 秒轉 90 度
-            const rotFrame = Math.floor((gameTime || Date.now()) / 250) % 4;
-            const angle = rotFrame * (Math.PI / 2);
-            ctx.save();
-            // translate to sprite center
-            const cx = obs.x + w / 2;
-            const cy = obs.y - h / 2;
-            ctx.translate(cx, cy);
-            ctx.rotate(angle);
-            ctx.drawImage(img, -w / 2, -h / 2, w, h);
-            ctx.restore();
-        } else {
-            ctx.drawImage(img, obs.x, obs.y - h, w, h);
-        }
+        ctx.drawImage(img, obs.x, obs.y - h, w, h);
     }
 
     function startLoop(canvas, scoreDisplay) {

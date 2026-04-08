@@ -22,8 +22,8 @@ P1_DOUBLE_JUMP_VY = -12.0   # 二段跳初速
 P2_UPSKILL_JUMP_VY        = -12.0  # upskill 起跳速度
 P2_DOWNSKILL_JUMP_VY      = -15.0  # downskill 起跳速度
 P2_UPSKILL_SPAWN_TICK     = 30     # upskill 起跳後第幾 TICK 召喚障礙物
-P2_UPSKILL_FIREBALL_VX    = 5.0    # upskill 火球額外水平速度（加到基本障礙速度）
-P2_UPSKILL_FIREBALL_VY_START = 0.0    # upskill 火球初始垂直速度（給反彈用）
+P2_UPSKILL_FIREBALL_VX    = 15.0    # upskill 火球額外水平速度（加到基本障礙速度）
+P2_UPSKILL_FIREBALL_VY_START = -10.0    # upskill 火球初始垂直速度（給反彈用）
 P2_DOWNSKILL_LAND_IMPULSE = -9.0   # downskill 落地時給地面障礙物的向上速度
 GROUND_ANIM_VY_START      = -5.0   # 地面外觀初始向上速度
 

@@ -3,6 +3,7 @@
 # ============================================================
 from game import state as gs
 from game.constants import *
+import math
 _socketio = None
 
 
@@ -133,6 +134,7 @@ def game_loop() -> None:
                             'type':              'fire',
                             'w':                 fw,
                             'h':                 fh,
+                            'angle':             math.atan2(0, P2_UPSKILL_FIREBALL_VX),
                         })
                         print(f"[upskill] fireball spawned tick={gs.tick_count}")
 
@@ -199,10 +201,28 @@ def game_loop() -> None:
                     obs['y']  += obs['vy']
                     if obs['y'] >= GROUND_Y:
                         obs['y']  = GROUND_Y
-                        obs['vy'] = 0.0
-                        nv = obs.get('current_bounce_vy', OBS_BOUNCE_VY_START) + OBS_BOUNCE_VY_DECREMENT
-                        obs['current_bounce_vy'] = min(nv, OBS_BOUNCE_VY_MIN)
-                        obs['bounce_cooldown']   = OBS_BOUNCE_COOLDOWN_TICKS
+                        # Fireballs do not bounce: stop vertical movement and remain rolling/flying horizontally
+                        if obs.get('is_fireball'):
+                            obs['vy'] = 0.0
+                            obs['jumping'] = False
+                            # ensure bounce-related state is cleared
+                            obs.pop('current_bounce_vy', None)
+                            obs.pop('bounce_cooldown', None)
+                            # on landing, inherit obstacle horizontal motion: move left like regular obstacles
+                            obs['vx'] = -OBSTACLE_SPEED
+                        else:
+                            obs['vy'] = 0.0
+                            nv = obs.get('current_bounce_vy', OBS_BOUNCE_VY_START) + OBS_BOUNCE_VY_DECREMENT
+                            obs['current_bounce_vy'] = min(nv, OBS_BOUNCE_VY_MIN)
+                            obs['bounce_cooldown']   = OBS_BOUNCE_COOLDOWN_TICKS
+
+            # 更新障礙物朝向：依其速度向量決定角度（使火球朝運動方向偏轉）
+            try:
+                obs_vx = obs.get('vx', OBSTACLE_SPEED)
+                obs_vy = obs.get('vy', 0.0)
+                obs['angle'] = math.atan2(obs_vy, obs_vx)
+            except Exception:
+                obs['angle'] = obs.get('angle', 0.0)
 
             # ---- P1 landing on top of obstacle (可以站在障礙物上) ---- (死亡動畫期間跳過碰撞檢查)
             if not gs.game_state['dying'] and p1 and p1['active']:
