@@ -4,7 +4,7 @@
 from game.constants import (
     GROUND_Y, PLAYER_HEIGHT, PLAYER_WIDTH, CANVAS_WIDTH,
     P1_SPRITE, P2_SPRITE_NORMAL, SLOT_NAMES,
-    OBSTACLE_HEIGHT, OBSTACLE_WIDTH,
+    OBSTACLE_HEIGHT, OBSTACLE_WIDTH, OBSTACLE_SIZES, OBSTACLE_DEFAULT_TYPE,
 )
 
 # ---- 連線 / 槽位管理 ----
@@ -71,10 +71,16 @@ def apply_sprite_schedule(player: dict, schedule: dict) -> None:
 
 def check_collision(player: dict, obs: dict, role: int = 1) -> bool:
     """AABB 碰撞：player.y 為左上角，obs.y 為底邊。"""
-    obs_top = obs['y'] - OBSTACLE_HEIGHT
+    # determine obstacle size (w,h) from obstacle dict or OBSTACLE_SIZES map
+    if 'w' in obs and 'h' in obs:
+        ow, oh = obs['w'], obs['h']
+    else:
+        t = obs.get('type', OBSTACLE_DEFAULT_TYPE)
+        ow, oh = OBSTACLE_SIZES.get(t, (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+    obs_top = obs['y'] - oh
     return (
         player['x'] + PLAYER_WIDTH[role]  > obs['x'] and
-        player['x']                 < obs['x'] + OBSTACLE_WIDTH and
+        player['x']                 < obs['x'] + ow and
         player['y'] + PLAYER_HEIGHT[role] > obs_top and
         player['y']                 < obs['y']
     )

@@ -6,6 +6,18 @@ from game.constants import *
 _socketio = None
 
 
+def _obs_size(obs):
+    """Return (w,h) for an obstacle from its dict or OBSTACLE_SIZES mapping."""
+    if not obs:
+        return (OBSTACLE_WIDTH, OBSTACLE_HEIGHT)
+    if 'w' in obs and 'h' in obs:
+        return obs['w'], obs['h']
+    t = obs.get('type') if isinstance(obs, dict) else None
+    if not t:
+        t = OBSTACLE_DEFAULT_TYPE
+    return OBSTACLE_SIZES.get(t, (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+
+
 def init(socketio_instance) -> None:
     """由 app.py 在啟動時注入 socketio 實例。"""
     global _socketio
@@ -70,8 +82,9 @@ def game_loop() -> None:
                     player['upskill_spawn_tick'] += 1
                     if player['upskill_spawn_tick'] == P2_UPSKILL_SPAWN_TICK:
                         player['upskill_spawn_tick'] = -1
-                        obs_x = player['x'] + PLAYER_WIDTH[role] // 2 - OBSTACLE_WIDTH // 2
-                        obs_y = max(0, player['y'] - OBSTACLE_HEIGHT - 5)
+                        fw, fh = OBSTACLE_SIZES.get('fire', (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
+                        obs_x = player['x'] + PLAYER_WIDTH[role] // 2 - fw // 2
+                        obs_y = max(0, player['y'] - fh - 5)
                         gs.game_state['obstacles'].append({
                             'x':                 obs_x,
                             'y':                 obs_y,
@@ -82,6 +95,9 @@ def game_loop() -> None:
                             'bounce_cooldown':   0,
                             'current_bounce_vy': OBS_BOUNCE_VY_START,
                             'is_fireball':       True,  # 標記為火球（不可踩）
+                            'type':              'fire',
+                            'w':                 fw,
+                            'h':                 fh,
                         })
                         print(f"[upskill] fireball spawned tick={gs.tick_count}")
 
@@ -131,6 +147,7 @@ def game_loop() -> None:
         new_obstacles = []
         p1 = gs.game_state['players'].get(1)
         for obs in gs.game_state['obstacles']:
+            ow, oh = _obs_size(obs)
             # 使用障礙物自身的 vx（如有），否則用預設速度；火球(vx=OBSTACLE_SPEED+P2_UPSKILL_FIREBALL_VX)
             obs['x'] -= obs.get('vx', OBSTACLE_SPEED)
             if obs.get('jumping'):
@@ -150,7 +167,7 @@ def game_loop() -> None:
 
             # ---- P1 landing on top of obstacle (可以站在障礙物上) ---- (死亡動畫期間跳過碰撞檢查)
             if not gs.game_state['dying'] and p1 and p1['active']:
-                obs_top = obs['y'] - OBSTACLE_HEIGHT
+                obs_top = obs['y'] - oh
                 player_bottom = p1['y'] + PLAYER_HEIGHT[1]
                 # previous tick bottom (before this tick's movement)
                 prev_player_bottom = player_bottom - p1.get('vel', 0)
@@ -160,7 +177,7 @@ def game_loop() -> None:
                 p_left = p1['x']
                 p_right = p1['x'] + PLAYER_WIDTH[1]
                 obs_left = obs['x']
-                obs_right = obs['x'] + OBSTACLE_WIDTH
+                obs_right = obs['x'] + ow
                 overlap = min(p_right, obs_right) - max(p_left, obs_left)
                 # 只要有少量重疊即可視為水平對齊（容許緩衝）
                 horiz_ok = overlap > max(2, PLAYER_WIDTH[1] * 0.2)
@@ -205,11 +222,11 @@ def game_loop() -> None:
                             p1['vx']                = obs.get('vx', 0)/5
                             p1['standing_on']      = None  # 解除登陸限制
 
-            if not gs.game_state['dying'] and not obs.get('scored') and obs['x'] + OBSTACLE_WIDTH < (p1['x'] if p1 else 0):
+            if not gs.game_state['dying'] and not obs.get('scored') and obs['x'] + ow < (p1['x'] if p1 else 0):
                 gs.game_state['score'] += 1
                 obs['scored'] = True
 
-            if obs['x'] + OBSTACLE_WIDTH > 0:
+            if obs['x'] + ow > 0:
                 new_obstacles.append(obs)
 
         gs.game_state['obstacles'] = new_obstacles
@@ -226,10 +243,11 @@ def game_loop() -> None:
                     continue
                 # check horizontal still overlaps
                 obs = standing
-                obs_top = obs['y'] - OBSTACLE_HEIGHT
+                ow, oh = _obs_size(obs)
+                obs_top = obs['y'] - oh
                 player_center_x = player['x'] + PLAYER_WIDTH[role] / 2
-                obs_center_x = obs['x'] + OBSTACLE_WIDTH / 2
-                horiz_ok = abs(player_center_x - obs_center_x) <= (OBSTACLE_WIDTH + PLAYER_WIDTH[role]) / 2
+                obs_center_x = obs['x'] + ow / 2
+                horiz_ok = abs(player_center_x - obs_center_x) <= (ow + PLAYER_WIDTH[role]) / 2
                 if not horiz_ok:
                     # no longer supported
                     player.pop('standing_on', None)
@@ -245,6 +263,7 @@ def game_loop() -> None:
         spawn_t += 1
         if spawn_t >= SPAWN_INTERVAL_TICKS:
             spawn_t = 0
+            sw, sh = OBSTACLE_SIZES.get('stone', (OBSTACLE_WIDTH, OBSTACLE_HEIGHT))
             gs.game_state['obstacles'].append({
                 'x':                 CANVAS_WIDTH,
                 'y':                 GROUND_Y,
@@ -255,6 +274,9 @@ def game_loop() -> None:
                 'bounce_cooldown':   0,
                 'current_bounce_vy': OBS_BOUNCE_VY_START,
                 'is_fireball':       False,  # 普通障礙物，可踩踏
+                'type':              'stone',
+                'w':                 sw,
+                'h':                 sh,
             })
 
         # ── 6. 地面外觀動畫推進 ─────────────────────────────
