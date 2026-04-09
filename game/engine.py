@@ -27,35 +27,285 @@ def init(socketio_instance) -> None:
 
 
 # ============================================================
-# 死亡動畫輔助函式
+# 通用物理
+# ============================================================
+
+def _apply_gravity(entity, vel_key='vel'):
+    """對任何有 vel/y 的物件施加重力並更新位置（玩家用 vel_key='vel'；障礙物用 vel_key='vy'）。"""
+    entity[vel_key] += GRAVITY
+    entity['y']     += entity[vel_key]
+
+
+# ============================================================
+# 障礙物物理
+# ============================================================
+
+def _obs_move_horizontal(obs):
+    """水平移動：火球向右（vx 有符號），石塊向左（vx 為速度大小）。"""
+    if obs.get('is_fireball'):
+        obs['x'] += obs.get('vx', P2_UPSKILL_FIREBALL_VX)
+    else:
+        obs['x'] -= obs.get('vx', OBSTACLE_SPEED)
+
+
+def _fireball_land(obs):
+    """火球觸地：停止彈跳，轉為向左以普通障礙速度滾動。"""
+    obs['vy']      = 0.0
+    obs['jumping'] = False
+    obs.pop('current_bounce_vy', None)
+    obs.pop('bounce_cooldown', None)
+    obs['vx'] = -OBSTACLE_SPEED
+
+
+def _stone_bounce(obs):
+    """石塊觸地：計算下一段反彈初速（遞減），設置等待冷卻。"""
+    obs['vy'] = 0.0
+    nv = obs.get('current_bounce_vy', OBS_BOUNCE_VY_START) + OBS_BOUNCE_VY_DECREMENT
+    obs['current_bounce_vy'] = min(nv, OBS_BOUNCE_VY_MIN)
+    obs['bounce_cooldown']   = OBS_BOUNCE_COOLDOWN_TICKS
+
+
+def _obs_vertical_physics(obs):
+    """障礙物垂直物理：冷卻倒數 → _apply_gravity → 觸地分派（_fireball_land / _stone_bounce）。"""
+    if not obs.get('jumping'):
+        return
+    if obs.get('bounce_cooldown', 0) > 0:
+        obs['bounce_cooldown'] -= 1
+        if obs['bounce_cooldown'] <= 0:
+            obs['vy'] = obs.get('current_bounce_vy', P2_UPSKILL_FIREBALL_VY_START)
+        return
+    _apply_gravity(obs, 'vy')
+    if obs['y'] >= GROUND_Y:
+        obs['y'] = GROUND_Y
+        if obs.get('is_fireball'):
+            _fireball_land(obs)
+        else:
+            _stone_bounce(obs)
+
+
+def _obs_update_angle(obs):
+    """依速度向量更新障礙物朝向角度（用於渲染旋轉）。"""
+    try:
+        obs_vy = obs.get('vy', 0.0)
+        obs_vx = obs.get('vx', P2_UPSKILL_FIREBALL_VX) if obs.get('is_fireball') \
+                 else -obs.get('vx', OBSTACLE_SPEED)
+        obs['angle'] = math.atan2(obs_vy, obs_vx)
+    except Exception:
+        obs['angle'] = obs.get('angle', 0.0)
+
+
+def _obs_tick_fading(obs):
+    """推進淡出倒數，回傳 True 表示已完全淡出（應從列表中移除）。"""
+    if not obs.get('fading'):
+        return False
+    obs['fade_ticks_remaining'] = max(0, obs.get('fade_ticks_remaining', 0) - 1)
+    return obs['fade_ticks_remaining'] <= 0
+
+
+# ============================================================
+# P2 技能對障礙物的影響
+# ============================================================
+
+def _downskill_apply_to_obs(obs):
+    """P2 downskill 落地時對單個地面障礙物施加向上衝量。
+    - 火球：清狀態、停止水平、觸發淡出
+    - 石塊：初始化反彈速度
+    """
+    obs['vy']              = P2_DOWNSKILL_LAND_IMPULSE
+    obs['jumping']         = True
+    obs['bounce_cooldown'] = 0
+    if obs.get('is_fireball'):
+        obs.pop('current_bounce_vy', None)
+        obs.pop('bounce_cooldown', None)
+        obs['vx'] = 0
+        fade_ticks = int(SERVER_FPS * 0.2)
+        obs['fading']               = True
+        obs['fade_ticks_remaining'] = fade_ticks
+        obs['fade_ticks_total']     = fade_ticks
+    else:
+        obs.setdefault('current_bounce_vy', OBS_BOUNCE_VY_START)
+
+
+def _downskill_land(sio):
+    """P2 downskill 落地：對所有地面障礙物呼叫 _downskill_apply_to_obs，觸發地面動畫。"""
+    for obs in gs.game_state['obstacles']:
+        if obs.get('y', 0) >= GROUND_Y - 1:
+            _downskill_apply_to_obs(obs)
+    gs.game_state['ground_animation']['vy'] = GROUND_ANIM_VY_START
+    sio.emit('skill_event', {'skill': 'downskill', 'event': 'land'})
+    print(f"[downskill] land impulse + ground anim tick={gs.tick_count}")
+
+
+# ============================================================
+# P2 upskill 火球生成
+# ============================================================
+
+def _spawn_upskill_fireball(player, role):
+    """P2 upskill 跳躍後計時觸發：在玩家當前位置生成火球。"""
+    fw, fh = OBSTACLE_SIZES['fire']
+    obs_x  = player['x'] + PLAYER_WIDTH[role] * 4 // 5 - fw // 2
+    obs_y  = int(player['y'] + PLAYER_HEIGHT[role] * 4 // 5 + fh // 2)
+    obs_y  = max(fh, min(obs_y, CANVAS_HEIGHT))
+    gs.game_state['obstacles'].append({
+        'x':                 obs_x,
+        'y':                 obs_y,
+        'scored':            False,
+        'jumping':           True,
+        'vy':                P2_UPSKILL_FIREBALL_VY_START,
+        'vx':                P2_UPSKILL_FIREBALL_VX,
+        'bounce_cooldown':   0,
+        'current_bounce_vy': P2_UPSKILL_FIREBALL_VY_START,
+        'is_fireball':       True,
+        'type':              'fire',
+        'w':                 fw,
+        'h':                 fh,
+        'angle':             math.atan2(0, P2_UPSKILL_FIREBALL_VX),
+    })
+    print(f"[upskill] fireball spawned tick={gs.tick_count}")
+
+
+# ============================================================
+# 玩家物理
+# ============================================================
+
+def _tick_player_physics(role, player, sio):
+    """單一玩家每 tick：_apply_gravity → 移動 → 觸地結算 → upskill 火球計時。"""
+    gt = gs.ground_top(role)
+    if player['y'] >= gt and player['vel'] == 0.0:
+        return  # 靜止在地面，略過
+
+    _apply_gravity(player)
+
+    # P2 upskill 火球生成計時
+    if role == 2 and player.get('upskill_spawn_tick', -1) >= 0:
+        player['upskill_spawn_tick'] += 1
+        if player['upskill_spawn_tick'] == P2_UPSKILL_SPAWN_TICK:
+            player['upskill_spawn_tick'] = -1
+            _spawn_upskill_fireball(player, role)
+
+    # 觸地結算
+    if player['y'] >= gt:
+        was_jumping         = player.get('isJumping', False)
+        player['y']         = gt
+        player['vel']       = 0.0
+        player['isJumping'] = False
+        player['canDouble'] = True
+        if role == 2:
+            player['skillLocked'] = False
+            if player.get('downskill_pending_land') and was_jumping:
+                player['downskill_pending_land'] = False
+                _downskill_land(sio)
+
+
+# ============================================================
+# 玩家外觀排程
+# ============================================================
+
+def _tick_sprite_schedule(role, player, sio):
+    """推進單一玩家的 sprite animation queue，觸發 roar 音效事件。"""
+    sched = player.get('sprite_schedule', [])
+    if not sched:
+        return
+    player['schedule_tick'] += 1
+    if player['schedule_tick'] < sched[0]['ticks']:
+        return
+    sched.pop(0)
+    player['schedule_tick'] = 0
+    if sched:
+        new_sprite = sched[0]['sprite']
+        player['sprite'] = new_sprite
+        if role == 2 and new_sprite == P2_SPRITE_ROAR:
+            sio.emit('skill_event', {'skill': 'upskill', 'event': 'roar'})
+    else:
+        player['sprite'] = P2_SPRITE_NORMAL if role == 2 else P1_SPRITE
+
+
+# ============================================================
+# P1 與障礙物互動
+# ============================================================
+
+def _p1_process_obs_interaction(p1, obs, ow, oh):
+    """P1 與單個障礙物的完整互動：頂部落地 → 維持支撐 → 側面碰撞觸發死亡。"""
+    obs_top            = obs['y'] - oh
+    player_bottom      = p1['y'] + PLAYER_HEIGHT[1]
+    prev_player_bottom = player_bottom - p1.get('vel', 0)
+    next_player_bottom = player_bottom + p1.get('vel', 0)
+    p_left    = p1['x'];   p_right   = p1['x'] + PLAYER_WIDTH[1]
+    obs_left  = obs['x'];  obs_right = obs['x'] + ow
+    overlap   = min(p_right, obs_right) - max(p_left, obs_left)
+    horiz_ok  = overlap > max(2, PLAYER_WIDTH[1] * 0.2)
+    vel       = p1.get('vel', 0)
+    crossed    = vel > 0 and prev_player_bottom <= obs_top and player_bottom >= obs_top
+    will_cross = vel > 0 and player_bottom <= obs_top and next_player_bottom >= obs_top
+
+    if horiz_ok and (crossed or will_cross) and not obs.get('is_fireball', False):
+        # ── 頂部落地 ──
+        p1['y']           = obs_top - PLAYER_HEIGHT[1]
+        p1['vel']         = obs.get('vy', 0)
+        p1['isJumping']   = False
+        p1['canDouble']   = True
+        p1['standing_on'] = obs
+        print(f"[land] on obs id={id(obs)} overlap={overlap:.1f} vel={vel:.2f} tick={gs.tick_count}")
+
+    elif p1.get('standing_on') is obs:
+        # ── 維持已站立支撐 ──
+        p1['y']   = obs_top - PLAYER_HEIGHT[1]
+        p1['vel'] = obs.get('vy', 0)
+        print(f"[support] on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
+
+    else:
+        # ── 側面碰撞 → 依障礙物類型觸發死亡動畫 ──
+        if gs.check_collision(p1, obs):
+            print(f"[hit] obs id={id(obs)} is_fireball={obs.get('is_fireball', False)} tick={gs.tick_count}")
+            if obs.get('is_fireball'):
+                _trigger_dying_fireball(p1, obs)
+            else:
+                _trigger_dying_obstacle(p1, obs)
+
+
+def _tick_standing_support():
+    """確保站在障礙物上的玩家跟隨垂直移動；水平脫離或障礙物消失則清除標記。"""
+    for role, player in gs.game_state['players'].items():
+        standing = player.get('standing_on')
+        if not standing:
+            continue
+        if standing not in gs.game_state['obstacles']:
+            player.pop('standing_on', None)
+            continue
+        obs = standing
+        ow, oh  = _obs_size(obs)
+        obs_top = obs['y'] - oh
+        player_cx = player['x'] + PLAYER_WIDTH[role] / 2
+        obs_cx    = obs['x'] + ow / 2
+        if abs(player_cx - obs_cx) > (ow + PLAYER_WIDTH[role]) / 2:
+            player.pop('standing_on', None)
+            continue
+        player['y'] = obs_top - PLAYER_HEIGHT[role]
+        if obs.get('vy'):
+            player['vel']       = obs['vy']
+            player['isJumping'] = True
+
+
+# ============================================================
+# 死亡動畫
 # ============================================================
 
 def _get_jump_params(start_pos, target_pos, g, vx):
-    """由已知水平速度與重力，反算所需初始垂直速度。
-    返回 (vx, vy) 或 None（無解）。
-    """
-    x1, y1 = start_pos
-    x2, y2 = target_pos
-    dx = x2 - x1
-    dy = y2 - y1
-    if vx == 0:
+    """由已知水平速度與重力，反算所需初始垂直速度。返回 (vx, vy) 或 None（無解）。"""
+    x1, y1 = start_pos; x2, y2 = target_pos
+    dx = x2 - x1; dy = y2 - y1
+    if vx == 0 or dx / vx <= 0:
         return None
     t = dx / vx
-    if t <= 0:
-        return None
-    vy = (dy - 0.5 * g * (t ** 2)) / t
-    return vx, vy
+    return vx, (dy - 0.5 * g * (t ** 2)) / t
 
 
 def _trigger_dying_obstacle(p1, obs):
-    """【障礙物死亡】計算 P1 飛向 P2 的拋物線軌跡，觸發 P2 eat 動畫。
-    dying_type = 'obstacle'
-    """
+    """【障礙物死亡】P1 以拋物線飛向 P2（P2 eat 動畫）。dying_type='obstacle'"""
     gs.game_state['dying']          = True
     gs.game_state['dying_type']     = 'obstacle'
     gs.game_state['gameOverReason'] = 'P1 hit obstacle'
     p1['dying_from_obs']            = obs
-
     start_x = p1['x'] + PLAYER_WIDTH[1] / 2
     start_y = p1['y'] + PLAYER_HEIGHT[1] / 2
     p2 = gs.game_state['players'].get(2)
@@ -65,62 +315,44 @@ def _trigger_dying_obstacle(p1, obs):
     else:
         target_x = CANVAS_WIDTH / 2
         target_y = gs.ground_top(1)
-
     raw_vx   = obs.get('vx', 0)
     world_vx = raw_vx if obs.get('is_fireball') else -raw_vx
-
-    params = _get_jump_params((start_x, start_y), (target_x, target_y), GRAVITY, world_vx)
+    params   = _get_jump_params((start_x, start_y), (target_x, target_y), GRAVITY, world_vx)
     if params is None:
         p1['vel'] = -10.0
         p1['vx']  = obs.get('vx', 0) / 5
     else:
         vx_used, vy_used = params
-        # engine 位移：p1['x'] -= p1['vx']，存負值使方向正確
-        p1['vx']  = -vx_used
+        p1['vx']  = -vx_used  # engine 以 p1['x'] -= p1['vx'] 位移
         p1['vel'] = vy_used
-
     p1['standing_on'] = None
 
 
 def _trigger_dying_fireball(p1, obs):
-    """【火球死亡】P1 繼承火球水平動能 /5，自由落體至畫面外；不觸發 P2 eat。
-    dying_type = 'fireball'
-    """
+    """【火球死亡】P1 繼承火球水平動能 /5，自由落體出畫面。dying_type='fireball'"""
     gs.game_state['dying']          = True
     gs.game_state['dying_type']     = 'fireball'
     gs.game_state['gameOverReason'] = 'P1 hit fireball'
-    p1['dying_from_obs']            = obs
-
+    p1['dying_from_obs']  = obs
     raw_vx   = obs.get('vx', 0)
     world_vx = raw_vx if obs.get('is_fireball') else -raw_vx
-    # engine 位移：p1['x'] -= p1['vx']，故取負令方向正確
     p1['vx']  = -world_vx / 5
-    p1['vel'] = -8.0          # 稍微向上彈起後自然落下
+    p1['vel'] = -8.0
     p1['standing_on'] = None
 
 
 def _handle_dying_obstacle_tick(p1, sio):
-    """每 tick【障礙物死亡】：讓 P1 飛向 P2，P2 觸發 eat 動畫後定時 gameOver。"""
+    """每 tick【障礙物死亡】：P1 飛向 P2，觸碰後 P2 eat → 定時 gameOver。"""
     p2 = gs.game_state['players'].get(2)
     if p2 and p2.get('active') and not p1.get('hidden'):
-        p1_left   = p1['x']
-        p1_right  = p1['x'] + PLAYER_WIDTH[1]
-        p1_top    = p1['y']
-        p1_bottom = p1['y'] + PLAYER_HEIGHT[1]
-        p2_left   = p2['x']
-        p2_right  = p2['x'] + PLAYER_WIDTH[2]
-        p2_top    = p2['y']
-        p2_bottom = p2['y'] + PLAYER_HEIGHT[2]
-
-        horiz = (p1_right > p2_left) and (p1_left < p2_right)
-        vert  = (p1_bottom > p2_top) and (p1_top < p2_bottom)
+        horiz = (p1['x'] + PLAYER_WIDTH[1]  > p2['x']) and (p1['x'] < p2['x'] + PLAYER_WIDTH[2])
+        vert  = (p1['y'] + PLAYER_HEIGHT[1] > p2['y']) and (p1['y'] < p2['y'] + PLAYER_HEIGHT[2])
         if horiz and vert:
             gs.apply_sprite_schedule(p2, P2_SKILL_SETS['eat'])
             p1['hidden'] = True
             p1['vel']    = 0.0
             p1['vx']     = 0.0
             gs.game_state['dying_end_tick'] = gs.tick_count + int(SERVER_FPS * 0.5)
-
     if gs.game_state.get('dying_end_tick') is not None:
         if gs.tick_count >= gs.game_state['dying_end_tick']:
             gs.game_state['gameOver'] = True
@@ -130,20 +362,71 @@ def _handle_dying_obstacle_tick(p1, sio):
 
 
 def _handle_dying_fireball_tick(p1):
-    """每 tick【火球死亡】：純自由落體 + 水平漂移；P1 離開畫面即 gameOver，不與 P2 互動。"""
+    """每 tick【火球死亡】：P1 離開畫面即 gameOver，不與 P2 互動。"""
     if p1['y'] > CANVAS_HEIGHT:
         gs.game_state['gameOver'] = True
 
 
+def _tick_dying_p1(sio):
+    """dying 模式每 tick：_apply_gravity + 水平位移 → 依 dying_type 分派動畫邏輯。"""
+    p1 = gs.game_state['players'].get(1)
+    if not (p1 and p1['active']):
+        return
+    _apply_gravity(p1)
+    p1['x'] -= p1.get('vx', 0)
+    if gs.game_state.get('dying_type', 'obstacle') == 'fireball':
+        _handle_dying_fireball_tick(p1)
+    else:
+        _handle_dying_obstacle_tick(p1, sio)
+
+
+# ============================================================
+# 障礙物生成
+# ============================================================
+
+def _spawn_stone_obstacle():
+    """生成一個普通石塊障礙物於右側畫面外。"""
+    sw, sh = OBSTACLE_SIZES['stone']
+    gs.game_state['obstacles'].append({
+        'x':                 OBSTACLE_SPAWN_X,
+        'y':                 GROUND_Y,
+        'scored':            False,
+        'jumping':           False,
+        'vy':                0.0,
+        'vx':                OBSTACLE_SPEED,
+        'bounce_cooldown':   0,
+        'current_bounce_vy': OBS_BOUNCE_VY_START,
+        'is_fireball':       False,
+        'type':              'stone',
+        'w':                 sw,
+        'h':                 sh,
+        'angle':             0.0,
+    })
+
+
+# ============================================================
+# 地面動畫
+# ============================================================
+
+def _tick_ground_animation():
+    """地面外觀動畫：_apply_gravity 下拉偏移，回到 0 後靜止。"""
+    ga = gs.game_state.get('ground_animation')
+    if not ga or (ga.get('vy', 0.0) == 0.0 and ga.get('offset', 0.0) == 0.0):
+        return
+    ga['vy']     += GRAVITY
+    ga['offset'] += ga['vy']
+    if ga['offset'] > 0:
+        ga['offset'] = 0.0
+        ga['vy']     = 0.0
+
+
+# ============================================================
+# 主遊戲迴圈
+# ============================================================
+
 def game_loop() -> None:
-    """每 TICK：
-       1. 玩家物理（重力 → 位置 → 落地）
-       2. 外觀排程推進
-       3. 障礙物物理（水平移動 + 反彈）
-       4. P1 碰撞障礙物 → 遊戲結束
-       5. 生成新障礙物
-       6. 地面外觀動畫推進
-       7. 廣播狀態
+    """每 TICK 依序執行：
+       dying → 玩家物理 → 外觀排程 → 障礙物物理+P1互動 → 站立支撐 → 生成 → 地面動畫 → 廣播
     """
     sio     = _socketio
     dt      = 1.0 / SERVER_FPS
@@ -154,304 +437,66 @@ def game_loop() -> None:
         sio.sleep(dt)
         gs.tick_count += 1
 
-        # 遊戲已結束，完全暫停所有遊戲邏輯，只廣播狀態
+        # 遊戲結束：暫停一切，僅廣播
         if gs.game_state['gameOver']:
             sio.emit('state', gs.game_state)
             continue
 
-        # 死亡動畫模式：依碰撞類型分派各自動畫流程，障礙物繼續運動
+        # ── dying 動畫 ──────────────────────────────────────
         if gs.game_state['dying']:
-            p1 = gs.game_state['players'].get(1)
-            if p1 and p1['active']:
-                # 通用：應用重力與位移
-                p1['vel'] += GRAVITY
-                p1['y']   += p1['vel']
-                p1['x']   -= p1.get('vx', 0)
-
-                # 依死亡類型分派到各自的動畫 tick 處理函式
-                dying_type = gs.game_state.get('dying_type', 'obstacle')
-                if dying_type == 'fireball':
-                    _handle_dying_fireball_tick(p1)
-                else:  # 'obstacle'
-                    _handle_dying_obstacle_tick(p1, sio)
-            # 在死亡動畫期間，障礙物仍然移動和彈跳，但跳過P1碰撞檢查
-            # 直接進入 obstacle 物理部分，稍後會跳過 P1 碰撞檢查
+            _tick_dying_p1(sio)
+            # dying 期間障礙物繼續運動，但後面的 P1 互動會被跳過
 
         # ── 1. 玩家物理 ─────────────────────────────────────
         for role, player in gs.game_state['players'].items():
             if not player['active']:
                 continue
-            # 死亡動畫期間，P1 已在早期單獨處理，跳過此部分
             if gs.game_state['dying'] and role == 1:
-                continue
-
-            gt_role = gs.ground_top(role)
-
-            if player['y'] < gt_role or player['vel'] != 0.0:
-                player['vel'] += GRAVITY
-                player['y']   += player['vel']
-
-                # P2 upskill 障礙物召喚計時
-                if role == 2 and player.get('upskill_spawn_tick', -1) >= 0:
-                    player['upskill_spawn_tick'] += 1
-                    if player['upskill_spawn_tick'] == P2_UPSKILL_SPAWN_TICK:
-                        player['upskill_spawn_tick'] = -1
-                        fw, fh = OBSTACLE_SIZES['fire']
-                        obs_x = player['x'] + PLAYER_WIDTH[role] * 4 // 5 - fw // 2
-                        # Place fireball vertically centered on the player (not far above)
-                        obs_y = int(player['y'] + PLAYER_HEIGHT[role] * 4 // 5 + fh // 2)
-                        # clamp inside canvas
-                        obs_y = max(fh, min(obs_y, CANVAS_HEIGHT))
-                        gs.game_state['obstacles'].append({
-                            'x':                 obs_x,
-                            'y':                 obs_y,
-                            'scored':            False,
-                            'jumping':           True,
-                            'vy':                P2_UPSKILL_FIREBALL_VY_START,
-                            # 火球改為面向右側，並使用獨立初速，不再受一般障礙速度影響
-                            'vx':                P2_UPSKILL_FIREBALL_VX,
-                            'bounce_cooldown':   0,
-                            'current_bounce_vy': P2_UPSKILL_FIREBALL_VY_START,
-                            'is_fireball':       True,  # 標記為火球（不可踩）
-                            'type':              'fire',
-                            'w':                 fw,
-                            'h':                 fh,
-                            'angle':             math.atan2(0, P2_UPSKILL_FIREBALL_VX),
-                        })
-                        print(f"[upskill] fireball spawned tick={gs.tick_count}")
-
-                # 落地
-                if player['y'] >= gt_role:
-                    player['y']         = gt_role
-                    player['vel']       = 0.0
-                    was_jumping         = player.get('isJumping', False)
-                    player['isJumping'] = False
-                    player['canDouble'] = True
-
-                    if role == 2:
-                        player['skillLocked'] = False
-
-                        if player.get('downskill_pending_land') and was_jumping:
-                            player['downskill_pending_land'] = False
-                            for obs in gs.game_state['obstacles']:
-                                if obs.get('y', 0) >= GROUND_Y - 1:
-                                    # Give upward impulse to obstacles on ground
-                                    obs['vy']            = P2_DOWNSKILL_LAND_IMPULSE
-                                    obs['jumping']       = True
-                                    obs['bounce_cooldown'] = 0
-                                    # Special behavior for fireballs: stop horizontal motion and start fading
-                                    if obs.get('is_fireball'):
-                                        # clear bounce state
-                                        obs.pop('current_bounce_vy', None)
-                                        obs.pop('bounce_cooldown', None)
-                                        # stop horizontal movement
-                                        obs['vx'] = 0
-                                        # start fade timer (0.2s)
-                                        fade_ticks = int(SERVER_FPS * 0.2)
-                                        obs['fading'] = True
-                                        obs['fade_ticks_remaining'] = fade_ticks
-                                        obs['fade_ticks_total'] = fade_ticks
-                                    else:
-                                        obs.setdefault('current_bounce_vy', OBS_BOUNCE_VY_START)
-                            gs.game_state['ground_animation']['vy'] = GROUND_ANIM_VY_START
-                            sio.emit('skill_event', {'skill': 'downskill', 'event': 'land'})
-                            print(f"[downskill] land impulse + ground anim tick={gs.tick_count}")
+                continue  # P1 已由 _tick_dying_p1 處理
+            _tick_player_physics(role, player, sio)
 
         # ── 2. 外觀排程推進 ─────────────────────────────────
         for role, player in gs.game_state['players'].items():
-            if not player['active']:
-                continue
-            sched = player.get('sprite_schedule', [])
-            if not sched:
-                continue
-            player['schedule_tick'] += 1
-            if player['schedule_tick'] >= sched[0]['ticks']:
-                sched.pop(0)
-                player['schedule_tick'] = 0
-                if sched:
-                    new_sprite = sched[0]['sprite']
-                    player['sprite'] = new_sprite
-                    if role == 2 and new_sprite == P2_SPRITE_ROAR:
-                        sio.emit('skill_event', {'skill': 'upskill', 'event': 'roar'})
-                else:
-                    player['sprite'] = P2_SPRITE_NORMAL if role == 2 else P1_SPRITE
+            if player['active']:
+                _tick_sprite_schedule(role, player, sio)
 
-        # ── 3 & 4. 障礙物物理 + P1 碰撞 / 站在障礙物上 ────────────────
+        # ── 3. 障礙物物理  4. P1 互動 ───────────────────────
         new_obstacles = []
         p1 = gs.game_state['players'].get(1)
         for obs in gs.game_state['obstacles']:
             ow, oh = _obs_size(obs)
-            # 使用障礙物自身的 vx（如有），否則用預設速度；火球(vx=OBSTACLE_SPEED+P2_UPSKILL_FIREBALL_VX)
-            # 移動：一般障礙向左移動（x 減少），火球向右移動（x 增加）且使用自己的初速
-            if obs.get('is_fireball'):
-                obs['x'] += obs.get('vx', P2_UPSKILL_FIREBALL_VX)
-            else:
-                obs['x'] -= obs.get('vx', OBSTACLE_SPEED)
-            if obs.get('jumping'):
-                if obs.get('bounce_cooldown', 0) > 0:
-                    obs['bounce_cooldown'] -= 1
-                    if obs['bounce_cooldown'] <= 0:
-                        obs['vy'] = obs.get('current_bounce_vy', P2_UPSKILL_FIREBALL_VY_START)
-                else:
-                    obs['vy'] += GRAVITY
-                    obs['y']  += obs['vy']
-                    if obs['y'] >= GROUND_Y:
-                        obs['y']  = GROUND_Y
-                        # Fireballs do not bounce: stop vertical movement and remain rolling/flying horizontally
-                        if obs.get('is_fireball'):
-                            obs['vy'] = 0.0
-                            obs['jumping'] = False
-                            # ensure bounce-related state is cleared
-                            obs.pop('current_bounce_vy', None)
-                            obs.pop('bounce_cooldown', None)
-                            # on landing, inherit obstacle horizontal motion: move left like regular obstacles
-                            obs['vx'] = -OBSTACLE_SPEED
-                        else:
-                            obs['vy'] = 0.0
-                            nv = obs.get('current_bounce_vy', OBS_BOUNCE_VY_START) + OBS_BOUNCE_VY_DECREMENT
-                            obs['current_bounce_vy'] = min(nv, OBS_BOUNCE_VY_MIN)
-                            obs['bounce_cooldown']   = OBS_BOUNCE_COOLDOWN_TICKS
+            _obs_move_horizontal(obs)
+            _obs_vertical_physics(obs)
+            _obs_update_angle(obs)
 
-            # 更新障礙物朝向：依其速度向量決定角度（使火球朝運動方向偏轉）
-            try:
-                # 注意：普通石塊的 vx 存儲的是速度大小，實際移動時 x -= vx（向左）
-                # 火球的 vx 是有符號速度：x += vx（可向左或向右）
-                obs_vy = obs.get('vy', 0.0)
-                if obs.get('is_fireball'):
-                    # 火球直接使用 vx（已是有符號速度）
-                    obs_vx = obs.get('vx', P2_UPSKILL_FIREBALL_VX)
-                else:
-                    # 普通石塊：vx 是速度大小，實際移動是向左，所以取負
-                    obs_vx = -obs.get('vx', OBSTACLE_SPEED)
-                obs['angle'] = math.atan2(obs_vy, obs_vx)
-            except Exception:
-                obs['angle'] = obs.get('angle', 0.0)
-
-            # ---- P1 landing on top of obstacle (可以站在障礙物上) ---- (死亡動畫期間跳過碰撞檢查)
             if not gs.game_state['dying'] and p1 and p1['active']:
-                obs_top = obs['y'] - oh
-                player_bottom = p1['y'] + PLAYER_HEIGHT[1]
-                # previous tick bottom (before this tick's movement)
-                prev_player_bottom = player_bottom - p1.get('vel', 0)
-                # predicted next tick bottom (if needed)
-                next_player_bottom = player_bottom + p1.get('vel', 0)
-                # 更穩健的水平重疊判定：計算水平重疊寬度
-                p_left = p1['x']
-                p_right = p1['x'] + PLAYER_WIDTH[1]
-                obs_left = obs['x']
-                obs_right = obs['x'] + ow
-                overlap = min(p_right, obs_right) - max(p_left, obs_left)
-                # 只要有少量重疊即可視為水平對齊（容許緩衝）
-                horiz_ok = overlap > max(2, PLAYER_WIDTH[1] * 0.2)
-                # landing condition:
-                # - falling (vel>0) and horizontal aligned, and
-                # - either we crossed the top this tick (prev_bottom <= obs_top <= player_bottom)
-                # - or we are above and would intersect next tick (player_bottom <= obs_top < next_player_bottom)
-                vel = p1.get('vel', 0)
-                crossed_this_tick = (vel > 0 and prev_player_bottom <= obs_top and player_bottom >= obs_top)
-                will_cross_next = (vel > 0 and player_bottom <= obs_top and next_player_bottom >= obs_top)
-                # 火球(is_fireball=True)不可踩踏，只有普通障礙物可以
-                if horiz_ok and (crossed_this_tick or will_cross_next) and not obs.get('is_fireball', False):
-                    # place player on top of obstacle and sync vertical velocity
-                    p1['y'] = obs_top - PLAYER_HEIGHT[1]
-                    # if obstacle is moving vertically, let player inherit its vy (可一起彈跳)
-                    p1['vel'] = obs.get('vy', 0)
-                    p1['isJumping'] = False
-                    p1['canDouble'] = True
-                    p1['standing_on'] = obs
-                    print(f"[land] P1 landed on obs id={id(obs)} at tick={gs.tick_count} overlap={overlap:.1f} prev_bottom={prev_player_bottom:.1f} player_bottom={player_bottom:.1f} obs_top={obs_top:.1f} vel={vel:.2f}")
-                else:
-                    # If player is already standing on this obstacle, maintain support instead of treating as side collision
-                    if p1.get('standing_on') is obs:
-                        # refresh player's top alignment
-                        p1['y'] = obs_top - PLAYER_HEIGHT[1]
-                        p1['vel'] = obs.get('vy', 0)
-                        # still considered standing
-                        # small overlap may occur; do not treat as collision
-                        # debug print for visibility
-                        print(f"[support] P1 remains on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
-                    else:
-                        # side / non-top collision -> 依碰撞物體類型觸發對應死亡動畫
-                        if gs.check_collision(p1, obs):
-                            print(f"[hit] P1 collision with obs id={id(obs)} overlap={overlap:.1f} p_bottom={player_bottom:.1f} obs_top={obs_top:.1f} is_fireball={obs.get('is_fireball', False)}")
-                            if obs.get('is_fireball'):
-                                _trigger_dying_fireball(p1, obs)
-                            else:
-                                _trigger_dying_obstacle(p1, obs)
+                _p1_process_obs_interaction(p1, obs, ow, oh)
 
-            if not gs.game_state['dying'] and not obs.get('scored') and obs['x'] + ow < (p1['x'] if p1 else 0):
+            if not gs.game_state['dying'] and not obs.get('scored') \
+                    and obs['x'] + ow < (p1['x'] if p1 else 0):
                 gs.game_state['score'] += 1
                 obs['scored'] = True
 
-            # handle fading countdown for obstacles (server-side authoritative)
-            if obs.get('fading'):
-                obs['fade_ticks_remaining'] = max(0, obs.get('fade_ticks_remaining', 0) - 1)
-                if obs['fade_ticks_remaining'] <= 0:
-                    # fully faded -> remove
-                    continue
+            if _obs_tick_fading(obs):
+                continue  # 淡出完畢，丟棄
 
             if obs['x'] + ow > OBSTACLE_DESPAWN_X:
                 new_obstacles.append(obs)
 
         gs.game_state['obstacles'] = new_obstacles
 
-        # 確保站在障礙物上的玩家跟隨障礙物的垂直運動或失去支撐時掉落（死亡動畫期間跳過）
+        # ── 5. 維持站立支撐 ─────────────────────────────────
         if not gs.game_state['dying']:
-            for role, player in gs.game_state['players'].items():
-                standing = player.get('standing_on')
-                if not standing:
-                    continue
-                # if the obstacle was removed or moved away, clear standing flag
-                if standing not in gs.game_state['obstacles']:
-                    player.pop('standing_on', None)
-                    continue
-                # check horizontal still overlaps
-                obs = standing
-                ow, oh = _obs_size(obs)
-                obs_top = obs['y'] - oh
-                player_center_x = player['x'] + PLAYER_WIDTH[role] / 2
-                obs_center_x = obs['x'] + ow / 2
-                horiz_ok = abs(player_center_x - obs_center_x) <= (ow + PLAYER_WIDTH[role]) / 2
-                if not horiz_ok:
-                    # no longer supported
-                    player.pop('standing_on', None)
-                    continue
-                # follow obstacle's vertical position
-                player['y'] = obs_top - PLAYER_HEIGHT[role]
-                # if obstacle has an upward impulse (vy), transfer it to player so they bounce together
-                if obs.get('vy'):
-                    player['vel'] = obs['vy']
-                    player['isJumping'] = True
+            _tick_standing_support()
 
-        # ── 5. 生成新障礙物 ─────────────────────────────────
+        # ── 6. 生成新石塊 ───────────────────────────────────
         spawn_t += 1
         if spawn_t >= SPAWN_INTERVAL_TICKS:
             spawn_t = 0
-            sw, sh = OBSTACLE_SIZES['stone']
-            gs.game_state['obstacles'].append({
-                'x':                 OBSTACLE_SPAWN_X,
-                'y':                 GROUND_Y,
-                'scored':            False,
-                'jumping':           False,
-                'vy':                0.0,
-                'vx':                OBSTACLE_SPEED,  # 普通障礙物的水平速度
-                'bounce_cooldown':   0,
-                'current_bounce_vy': OBS_BOUNCE_VY_START,
-                'is_fireball':       False,  # 普通障礙物，可踩踏
-                'type':              'stone',
-                'w':                 sw,
-                'h':                 sh,
-                'angle':             0.0,  # 初始水平，每 tick 根據速度向量更新
-            })
+            _spawn_stone_obstacle()
 
-        # ── 6. 地面外觀動畫推進 ─────────────────────────────
-        ga = gs.game_state.get('ground_animation')
-        if ga and (ga.get('vy', 0.0) != 0.0 or ga.get('offset', 0.0) != 0.0):
-            ga['vy']     += GRAVITY
-            ga['offset'] += ga['vy']
-            if ga['offset'] > 0:
-                ga['offset'] = 0.0
-                ga['vy']     = 0.0
+        # ── 7. 地面動畫 ─────────────────────────────────────
+        _tick_ground_animation()
 
-        # ── 7. 廣播 ─────────────────────────────────────────
+        # ── 8. 廣播 ─────────────────────────────────────────
         sio.emit('state', gs.game_state)
