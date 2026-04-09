@@ -58,6 +58,11 @@ def register(socketio) -> None:
 
         gs.rebuild_players()
         occupied = sum(1 for v in gs.slot_owners.values() if v is not None)
+        
+        # 遊戲即將開始：清除舊狀態
+        if occupied >= 2 and not gs.spawn_task_running:
+            gs.reset_game()
+        
         emit('assign', {'assigned': assigned, 'count': occupied})
         socketio.emit('state', gs.game_state)
         socketio.emit('player_count', {'count': occupied})

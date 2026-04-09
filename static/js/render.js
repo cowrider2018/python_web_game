@@ -139,21 +139,6 @@ const Renderer = (() => {
 
                 // 分數
                 scoreDisplay.innerText = `Score: ${state.score}`;
-
-                // 遊戲結束 overlay
-                if (state.gameOver) {
-                    ctx.fillStyle = 'rgba(0,0,0,0.45)';
-                    ctx.fillRect(0, 0, cw, ch);
-                    ctx.textAlign = 'center';
-                    ctx.fillStyle = 'white';
-                    ctx.font = 'bold 48px Arial';
-                    ctx.fillText('GAME OVER!', cw / 2, ch / 2 - 40);
-                    ctx.font = '24px Arial';
-                    ctx.fillText(`SCORE: ${state.score}`, cw / 2, ch / 2 + 20);
-                    ctx.font = '18px Arial';
-                    ctx.fillText('TAP TO RESTART', cw / 2, ch / 2 + 70);
-                    ctx.textAlign = 'left';
-                }
             }
 
             requestAnimationFrame(update);
