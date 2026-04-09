@@ -10,6 +10,7 @@ const Renderer = (() => {
         'stone.png',
         'fire_1.png',
         'fire_2.png',
+        'tree.png',
     ];
     const SPRITE_MAP = {};
     let _loadedCount = 0;
@@ -45,6 +46,71 @@ const Renderer = (() => {
         ctx.scale(-1, 1);
         ctx.drawImage(img, -w / 2, -h / 2, w, h);
         ctx.restore();
+    }
+
+    function _randomFloat(min, max) {
+        return min + Math.random() * (max - min);
+    }
+
+    // ============================================================
+    // 背景樹
+    // ============================================================
+    const TREE_TINT_MAX = 0.6;  // 最大染色強度（0=無，1=完全背景色）可隨時調整
+
+    let _trees = [];
+    let _treeSpawnCountdown = 0;
+
+    // 在離屏 canvas 上完成染色，只影響有像素的區域，返回處理完的 canvas
+    function _buildTintedTreeCanvas(w, h, tintStrength) {
+        const off = document.createElement('canvas');
+        off.width  = w;
+        off.height = h;
+        const offCtx = off.getContext('2d');
+
+        // 步驟1：畫去背原圖
+        offCtx.drawImage(_spriteImg('tree.png'), 0, 0, w, h);
+
+        // 步驟2：source-atop 只在有像素的區域蓋上背景色，透明區域不受影響
+        if (tintStrength > 0) {
+            offCtx.globalCompositeOperation = 'source-atop';
+            offCtx.globalAlpha = tintStrength;
+            offCtx.fillStyle = '#87ceeb';
+            offCtx.fillRect(0, 0, w, h);
+        }
+
+        return off;
+    }
+
+    function _spawnTree(cfg, cw, groundDrawY) {
+        const img   = _spriteImg('tree.png');
+        const scale = Math.max(0.1, _randomFloat(cfg.TREE_SCALE_MIN, cfg.TREE_SCALE_MAX));
+        const w     = Math.max(1, Math.round((img.naturalWidth  || 64) * scale));
+        const h     = Math.max(1, Math.round((img.naturalHeight || 64) * scale));
+
+        // normalized: 0=最小樹, 1=最大樹
+        const normalized    = cfg.TREE_SCALE_MAX > cfg.TREE_SCALE_MIN
+            ? (scale - cfg.TREE_SCALE_MIN) / (cfg.TREE_SCALE_MAX - cfg.TREE_SCALE_MIN)
+            : 0;
+        const tintStrength  = (1 - normalized) * TREE_TINT_MAX;
+
+        _trees.push({
+            x:          cw + w,
+            y:          groundDrawY - h,
+            w,
+            h,
+            speed:      cfg.TREE_SPEED,
+            normalized,                     // 0(小) ~ 1(大)，供圖層排序
+            canvas:     _buildTintedTreeCanvas(w, h, tintStrength), // 生成時一次性完成染色
+        });
+    }
+
+    function _drawTree(ctx, tree) {
+        // 直接貼已染色完成的去背圖，不需要每幀重複合成
+        ctx.drawImage(tree.canvas, tree.x, tree.y, tree.w, tree.h);
+    }
+
+    function _nextTreeSpawnInterval(cfg) {
+        return Math.max(1, Math.floor(_randomFloat(cfg.TREE_SPAWN_INTERVAL_MIN, cfg.TREE_SPAWN_INTERVAL_MAX)));
     }
 
     function _drawPlayer(ctx, player, role, offsetX, offsetY) {
@@ -114,6 +180,8 @@ const Renderer = (() => {
 
     function startLoop(canvas, scoreDisplay) {
         const ctx = canvas.getContext('2d');
+        _trees = [];
+        _treeSpawnCountdown = _nextTreeSpawnInterval(GameConfig);
 
         function update() {
             const cfg   = GameConfig;
@@ -135,6 +203,20 @@ const Renderer = (() => {
             ctx.fillStyle = '#2d5016';
             const groundDrawY = cfg.GROUND_Y + groundOffset + offsetY;
             ctx.fillRect(0, groundDrawY, cw, ch - groundDrawY);
+
+            // 背景樹：依指定頻率、大小與速度出現，僅作背景裝飾
+            if (_treeSpawnCountdown <= 0) {
+                _spawnTree(cfg, cw, groundDrawY);
+                _treeSpawnCountdown = _nextTreeSpawnInterval(cfg);
+            } else {
+                _treeSpawnCountdown -= 1;
+            }
+            _trees.sort((a, b) => a.normalized - b.normalized);
+            _trees.forEach(tree => {
+                tree.x -= tree.speed;
+                _drawTree(ctx, tree);
+            });
+            _trees = _trees.filter(tree => tree.x + tree.w > 0);
 
             if (state) {
                 // 玩家

@@ -10,6 +10,13 @@ const GameConfig = {
     OBSTACLE_SIZES:  { stone: [64, 64], fire: [64, 64] },
     SERVER_FPS:      120,
 
+    // 背景樹設定：可在此調整出現頻率、大小範圍與水平移動速率
+    TREE_SPAWN_INTERVAL_MIN: 5,
+    TREE_SPAWN_INTERVAL_MAX: 60,
+    TREE_SCALE_MIN:          2.5,
+    TREE_SCALE_MAX:          7.0,
+    TREE_SPEED:              4,
+
     _ready:     false,
     _callbacks: [],
 
@@ -37,6 +44,11 @@ const GameConfig = {
                 this.PLAYER_HEIGHT   = cfg.player_height   || this.PLAYER_HEIGHT;
                 if (cfg.obstacle_sizes) this.OBSTACLE_SIZES = cfg.obstacle_sizes;
                 this.SERVER_FPS      = cfg.server_fps      || this.SERVER_FPS;
+                this.TREE_SPAWN_INTERVAL_MIN = cfg.tree_spawn_interval_min ?? this.TREE_SPAWN_INTERVAL_MIN;
+                this.TREE_SPAWN_INTERVAL_MAX = cfg.tree_spawn_interval_max ?? this.TREE_SPAWN_INTERVAL_MAX;
+                this.TREE_SCALE_MIN          = cfg.tree_scale_min ?? this.TREE_SCALE_MIN;
+                this.TREE_SCALE_MAX          = cfg.tree_scale_max ?? this.TREE_SCALE_MAX;
+                this.TREE_SPEED              = cfg.tree_speed ?? this.TREE_SPEED;
                 this._resolve();
             })
             .catch(() => this._resolve());
