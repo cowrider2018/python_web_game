@@ -98,6 +98,7 @@ def reset_game() -> None:
     game_state['score']             = 0
     game_state['gameOver']          = False
     game_state['dying']             = False  # 重置死亡動畫狀態，恢復正常物理
+    game_state['dying_type']        = 'obstacle'  # 預設死亡類型（'obstacle' 或 'fireball'）
     game_state['gameOverReason']    = ''
     game_state['ground_animation']  = {'offset': 0.0, 'vy': 0.0}
     # 清除任何 dying 結束計時

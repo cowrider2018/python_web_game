@@ -26,6 +26,115 @@ def init(socketio_instance) -> None:
     _socketio = socketio_instance
 
 
+# ============================================================
+# 死亡動畫輔助函式
+# ============================================================
+
+def _get_jump_params(start_pos, target_pos, g, vx):
+    """由已知水平速度與重力，反算所需初始垂直速度。
+    返回 (vx, vy) 或 None（無解）。
+    """
+    x1, y1 = start_pos
+    x2, y2 = target_pos
+    dx = x2 - x1
+    dy = y2 - y1
+    if vx == 0:
+        return None
+    t = dx / vx
+    if t <= 0:
+        return None
+    vy = (dy - 0.5 * g * (t ** 2)) / t
+    return vx, vy
+
+
+def _trigger_dying_obstacle(p1, obs):
+    """【障礙物死亡】計算 P1 飛向 P2 的拋物線軌跡，觸發 P2 eat 動畫。
+    dying_type = 'obstacle'
+    """
+    gs.game_state['dying']          = True
+    gs.game_state['dying_type']     = 'obstacle'
+    gs.game_state['gameOverReason'] = 'P1 hit obstacle'
+    p1['dying_from_obs']            = obs
+
+    start_x = p1['x'] + PLAYER_WIDTH[1] / 2
+    start_y = p1['y'] + PLAYER_HEIGHT[1] / 2
+    p2 = gs.game_state['players'].get(2)
+    if p2 and p2.get('active'):
+        target_x = p2['x'] + PLAYER_WIDTH[2] / 2
+        target_y = p2['y'] + PLAYER_HEIGHT[2] / 2
+    else:
+        target_x = CANVAS_WIDTH / 2
+        target_y = gs.ground_top(1)
+
+    raw_vx   = obs.get('vx', 0)
+    world_vx = raw_vx if obs.get('is_fireball') else -raw_vx
+
+    params = _get_jump_params((start_x, start_y), (target_x, target_y), GRAVITY, world_vx)
+    if params is None:
+        p1['vel'] = -10.0
+        p1['vx']  = obs.get('vx', 0) / 5
+    else:
+        vx_used, vy_used = params
+        # engine 位移：p1['x'] -= p1['vx']，存負值使方向正確
+        p1['vx']  = -vx_used
+        p1['vel'] = vy_used
+
+    p1['standing_on'] = None
+
+
+def _trigger_dying_fireball(p1, obs):
+    """【火球死亡】P1 繼承火球水平動能 /5，自由落體至畫面外；不觸發 P2 eat。
+    dying_type = 'fireball'
+    """
+    gs.game_state['dying']          = True
+    gs.game_state['dying_type']     = 'fireball'
+    gs.game_state['gameOverReason'] = 'P1 hit fireball'
+    p1['dying_from_obs']            = obs
+
+    raw_vx   = obs.get('vx', 0)
+    world_vx = raw_vx if obs.get('is_fireball') else -raw_vx
+    # engine 位移：p1['x'] -= p1['vx']，故取負令方向正確
+    p1['vx']  = -world_vx / 5
+    p1['vel'] = -8.0          # 稍微向上彈起後自然落下
+    p1['standing_on'] = None
+
+
+def _handle_dying_obstacle_tick(p1, sio):
+    """每 tick【障礙物死亡】：讓 P1 飛向 P2，P2 觸發 eat 動畫後定時 gameOver。"""
+    p2 = gs.game_state['players'].get(2)
+    if p2 and p2.get('active') and not p1.get('hidden'):
+        p1_left   = p1['x']
+        p1_right  = p1['x'] + PLAYER_WIDTH[1]
+        p1_top    = p1['y']
+        p1_bottom = p1['y'] + PLAYER_HEIGHT[1]
+        p2_left   = p2['x']
+        p2_right  = p2['x'] + PLAYER_WIDTH[2]
+        p2_top    = p2['y']
+        p2_bottom = p2['y'] + PLAYER_HEIGHT[2]
+
+        horiz = (p1_right > p2_left) and (p1_left < p2_right)
+        vert  = (p1_bottom > p2_top) and (p1_top < p2_bottom)
+        if horiz and vert:
+            gs.apply_sprite_schedule(p2, P2_SKILL_SETS['eat'])
+            p1['hidden'] = True
+            p1['vel']    = 0.0
+            p1['vx']     = 0.0
+            gs.game_state['dying_end_tick'] = gs.tick_count + int(SERVER_FPS * 0.5)
+
+    if gs.game_state.get('dying_end_tick') is not None:
+        if gs.tick_count >= gs.game_state['dying_end_tick']:
+            gs.game_state['gameOver'] = True
+    else:
+        if p1['y'] > CANVAS_HEIGHT:
+            gs.game_state['gameOver'] = True
+
+
+def _handle_dying_fireball_tick(p1):
+    """每 tick【火球死亡】：純自由落體 + 水平漂移；P1 離開畫面即 gameOver，不與 P2 互動。"""
+    if p1['y'] > CANVAS_HEIGHT:
+        gs.game_state['gameOver'] = True
+
+
 def game_loop() -> None:
     """每 TICK：
        1. 玩家物理（重力 → 位置 → 落地）
@@ -50,49 +159,21 @@ def game_loop() -> None:
             sio.emit('state', gs.game_state)
             continue
 
-        # 死亡動畫模式：P1 掉落至 P2 或掉出畫面，障礙物繼續運動
+        # 死亡動畫模式：依碰撞類型分派各自動畫流程，障礙物繼續運動
         if gs.game_state['dying']:
             p1 = gs.game_state['players'].get(1)
             if p1 and p1['active']:
-                # 應用重力，讓 P1 自由掉落
+                # 通用：應用重力與位移
                 p1['vel'] += GRAVITY
                 p1['y']   += p1['vel']
-                # 繼承水平速度（來自碰撞的障礙物 vx），讓 P1 水平移動
-                p1['x']  -= p1.get('vx', 0)
+                p1['x']   -= p1.get('vx', 0)
 
-                # 若 P2 在場且 P1 未被隱藏，檢查是否接觸到 P2
-                p2 = gs.game_state['players'].get(2)
-                if p2 and p2.get('active') and not p1.get('hidden'):
-                    # AABB 碰撞檢查（使用各自的寬高）
-                    p1_left = p1['x']
-                    p1_right = p1['x'] + PLAYER_WIDTH[1]
-                    p1_top = p1['y']
-                    p1_bottom = p1['y'] + PLAYER_HEIGHT[1]
-
-                    p2_left = p2['x']
-                    p2_right = p2['x'] + PLAYER_WIDTH[2]
-                    p2_top = p2['y']
-                    p2_bottom = p2['y'] + PLAYER_HEIGHT[2]
-
-                    horiz = (p1_right > p2_left) and (p1_left < p2_right)
-                    vert = (p1_bottom > p2_top) and (p1_top < p2_bottom)
-                    if horiz and vert:
-                        # 觸碰到 P2：觸發 P2 的 eat 動畫、隱藏 P1，並在動畫結束後 0.5 秒結束 dying
-                        gs.apply_sprite_schedule(p2, P2_SKILL_SETS['eat'])
-                        p1['hidden'] = True
-                        # 停止 P1 的移動
-                        p1['vel'] = 0.0
-                        p1['vx'] = 0.0
-                        # schedule dying 結束的 tick（0.5 秒後）
-                        gs.game_state['dying_end_tick'] = gs.tick_count + int(SERVER_FPS * 0.5)
-
-                # 若已經排定 dying 結束時刻，則以該條件結束；否則維持原本掉出畫面判定
-                if gs.game_state.get('dying_end_tick') is not None:
-                    if gs.tick_count >= gs.game_state['dying_end_tick']:
-                        gs.game_state['gameOver'] = True
-                else:
-                    if p1['y'] > CANVAS_HEIGHT:
-                        gs.game_state['gameOver'] = True
+                # 依死亡類型分派到各自的動畫 tick 處理函式
+                dying_type = gs.game_state.get('dying_type', 'obstacle')
+                if dying_type == 'fireball':
+                    _handle_dying_fireball_tick(p1)
+                else:  # 'obstacle'
+                    _handle_dying_obstacle_tick(p1, sio)
             # 在死亡動畫期間，障礙物仍然移動和彈跳，但跳過P1碰撞檢查
             # 直接進入 obstacle 物理部分，稍後會跳過 P1 碰撞檢查
 
@@ -290,61 +371,13 @@ def game_loop() -> None:
                         # debug print for visibility
                         print(f"[support] P1 remains on obs id={id(obs)} overlap={overlap:.1f} tick={gs.tick_count}")
                     else:
-                        # side / non-top collision -> death animation
+                        # side / non-top collision -> 依碰撞物體類型觸發對應死亡動畫
                         if gs.check_collision(p1, obs):
-                            print(f"[hit] P1 collision with obs id={id(obs)} overlap={overlap:.1f} p_bottom={player_bottom:.1f} obs_top={obs_top:.1f}")
-                            # 進入死亡動畫模式：計算初速度使 P1 飛到 P2 身上
-                            gs.game_state['dying']  = True
-                            gs.game_state['gameOverReason'] = 'P1 hit obstacle'
-                            p1['dying_from_obs']    = obs  # 保存碰撞物體以供動畫期間使用
-
-                            # 參考公式：由已知水平速度與重力，反算所需初始垂直速度
-                            def _get_jump_params(start_pos, target_pos, g, vx):
-                                x1, y1 = start_pos
-                                x2, y2 = target_pos
-                                dx = x2 - x1
-                                dy = y2 - y1
-                                # 避免除以零
-                                if vx == 0:
-                                    return None
-                                t = dx / vx
-                                # 若飛行時間非正，則無法用此 vx 到達
-                                if t <= 0:
-                                    return None
-                                vy = (dy - 0.5 * g * (t**2)) / t
-                                return vx, vy
-
-                            # 起點、終點採中心點
-                            start_x = p1['x'] + PLAYER_WIDTH[1] / 2
-                            start_y = p1['y'] + PLAYER_HEIGHT[1] / 2
-                            p2 = gs.game_state['players'].get(2)
-                            if p2 and p2.get('active'):
-                                target_x = p2['x'] + PLAYER_WIDTH[2] / 2
-                                target_y = p2['y'] + PLAYER_HEIGHT[2] / 2
-                            else:
-                                # 若 P2 不存在，則以畫面中間為目標
-                                target_x = CANVAS_WIDTH / 2
-                                target_y = gs.ground_top(1)  # 站在地上
-
-                            raw_vx = obs.get('vx', 0)
-                            # 轉換為世界座標的 vx（右為正）
+                            print(f"[hit] P1 collision with obs id={id(obs)} overlap={overlap:.1f} p_bottom={player_bottom:.1f} obs_top={obs_top:.1f} is_fireball={obs.get('is_fireball', False)}")
                             if obs.get('is_fireball'):
-                                world_vx = raw_vx
+                                _trigger_dying_fireball(p1, obs)
                             else:
-                                world_vx = -raw_vx
-
-                            params = _get_jump_params((start_x, start_y), (target_x, target_y), GRAVITY, world_vx)
-                            if params is None:
-                                # fallback: 使用預設行為（向上丟出）以避免數學錯誤
-                                p1['vel'] = -10.0
-                                p1['vx']  = obs.get('vx', 0) / 5
-                            else:
-                                vx_used, vy_used = params
-                                # engine 的死亡移動使用 p1['x'] -= p1['vx']，因此存入的 vx 需取負
-                                p1['vx']  = -vx_used
-                                p1['vel'] = vy_used
-
-                            p1['standing_on']      = None  # 解除登陸限制
+                                _trigger_dying_obstacle(p1, obs)
 
             if not gs.game_state['dying'] and not obs.get('scored') and obs['x'] + ow < (p1['x'] if p1 else 0):
                 gs.game_state['score'] += 1
