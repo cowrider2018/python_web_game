@@ -173,7 +173,7 @@ def register(socketio) -> None:
 
         gt = gs.ground_top(2)
         # Allow skill if on ground OR standing on obstacle
-        on_ground_or_obs = player['y'] >= gt - 1 or player.get('standing_on') is not None
+        on_ground_or_obs = player['y'] >= gt - max(1.0, abs(player.get('vel', 0.0))) or player.get('standing_on') is not None
         if not on_ground_or_obs or player.get('skillLocked'):
             return
 
