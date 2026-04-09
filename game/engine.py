@@ -4,6 +4,7 @@
 from game import state as gs
 from game.constants import *
 import math
+import random
 _socketio = None
 
 
@@ -399,8 +400,45 @@ def _tick_dying_p1(sio):
 # 障礙物生成
 # ============================================================
 
+def _spawn_matrix_stack(base_x, ground_y, matrix):
+    """依照 3x4 堆疊矩陣生成多個石塊障礙物，最後一欄為該行的統一偏移。"""
+    rows = len(matrix)
+    block_w, block_h = OBSTACLE_SIZES['stone']
+
+    for row_idx in range(rows):
+        row_data = matrix[row_idx]
+        row_offset = row_data[-1]  # 最後一欄是該行的統一偏移
+        cols = len(row_data) - 1  # 前面的欄位是方塊標記
+        
+        for col_idx in range(cols):
+            if row_data[col_idx] != 1:
+                continue
+            spawn_x = base_x + (col_idx * block_w) + row_offset
+            spawn_y = ground_y - ((rows - 1) - row_idx) * block_h
+            gs.game_state['obstacles'].append({
+                'x':                 spawn_x,
+                'y':                 spawn_y,
+                'scored':            False,
+                'jumping':           False,
+                'vy':                0.0,
+                'vx':                OBSTACLE_SPEED,
+                'bounce_cooldown':   0,
+                'current_bounce_vy': OBS_BOUNCE_VY_START,
+                'is_fireball':       False,
+                'type':              'stone',
+                'w':                 block_w,
+                'h':                 block_h,
+                'angle':             0.0,
+            })
+
+
 def _spawn_stone_obstacle():
-    """生成一個普通石塊障礙物於右側畫面外。"""
+    """生成單顆普通石塊或隨機堆疊障礙物。"""
+    if random.random() < STACK_SPAWN_CHANCE:
+        matrix = random.choice(STACK_MATRICES)
+        _spawn_matrix_stack(OBSTACLE_SPAWN_X, GROUND_Y, matrix)
+        return
+
     sw, sh = OBSTACLE_SIZES['stone']
     gs.game_state['obstacles'].append({
         'x':                 OBSTACLE_SPAWN_X,
