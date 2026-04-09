@@ -126,11 +126,26 @@ def _downskill_apply_to_obs(obs):
         obs.setdefault('current_bounce_vy', OBS_BOUNCE_VY_START)
 
 
+def _downskill_apply_to_player(player):
+    """P2 downskill 落地時對地面上的玩家施加向上衝量。"""
+    player['vel']       = P2_DOWNSKILL_PLAYER_IMPULSE
+    player['isJumping'] = True
+    player['canDouble'] = True
+
+
 def _downskill_land(sio):
-    """P2 downskill 落地：對所有地面障礙物呼叫 _downskill_apply_to_obs，觸發地面動畫。"""
+    """P2 downskill 落地：推起地面障礙物 + 玩家（P2 自身除外），觸發地面動畫。"""
     for obs in gs.game_state['obstacles']:
         if obs.get('y', 0) >= GROUND_Y - 1:
             _downskill_apply_to_obs(obs)
+    gt_p1 = gs.ground_top(1)
+    for role, player in gs.game_state['players'].items():
+        if role == 2:
+            continue   # P2 是施術者，不受影響
+        if not player.get('active'):
+            continue
+        if player['y'] >= gt_p1 - 1 and player.get('vel', 0) == 0.0:
+            _downskill_apply_to_player(player)
     gs.game_state['ground_animation']['vy'] = GROUND_ANIM_VY_START
     sio.emit('skill_event', {'skill': 'downskill', 'event': 'land'})
     print(f"[downskill] land impulse + ground anim tick={gs.tick_count}")

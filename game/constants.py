@@ -24,8 +24,9 @@ P2_DOWNSKILL_JUMP_VY      = -15.0  # downskill 起跳速度
 P2_UPSKILL_SPAWN_TICK     = 30     # upskill 起跳後第幾 TICK 召喚障礙物
 P2_UPSKILL_FIREBALL_VX    = 15.0    # upskill 火球額外水平速度（加到基本障礙速度）
 P2_UPSKILL_FIREBALL_VY_START = -10.0    # upskill 火球初始垂直速度（給反彈用）
-P2_DOWNSKILL_LAND_IMPULSE = -9.0   # downskill 落地時給地面障礙物的向上速度
-GROUND_ANIM_VY_START      = -5.0   # 地面外觀初始向上速度
+P2_DOWNSKILL_LAND_IMPULSE        = -13.0   # downskill 落地時給地面障礙物的向上速度
+P2_DOWNSKILL_PLAYER_IMPULSE      = -12.0   # downskill 落地時給地面上玩家的向上速度（獨立調整）
+GROUND_ANIM_VY_START             = -10.0   # 地面外觀初始向上速度
 
 # ---- 障礙物 ----
 OBSTACLE_SPEED        = 5     # 每 TICK 水平移動像素
@@ -42,8 +43,8 @@ OBSTACLE_SIZES = {
 }
 OBSTACLE_DEFAULT_TYPE = 'stone'
 
-OBS_BOUNCE_VY_START       = -7.0  # 初始反彈速度（向上）
 OBS_BOUNCE_VY_DECREMENT   =  1.0  # 每次反彈速度衰減量
+OBS_BOUNCE_VY_START       =  P2_DOWNSKILL_LAND_IMPULSE + OBS_BOUNCE_VY_DECREMENT  # 初始反彈速度（向上）
 OBS_BOUNCE_VY_MIN         = -3.0  # 反彈速度下限
 OBS_BOUNCE_COOLDOWN_TICKS =  1    # 落地後冷卻 TICK 數
 
