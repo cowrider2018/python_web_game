@@ -390,7 +390,7 @@ def game_loop() -> None:
                     # fully faded -> remove
                     continue
 
-            if obs['x'] + ow > 0:
+            if obs['x'] + ow > OBSTACLE_DESPAWN_X:
                 new_obstacles.append(obs)
 
         gs.game_state['obstacles'] = new_obstacles

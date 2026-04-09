@@ -32,6 +32,8 @@ OBSTACLE_SPEED        = 5     # 每 TICK 水平移動像素
 SPAWN_INTERVAL_TICKS  = 300   # 每隔幾 TICK 生成一個障礙物
 # 障礙物出生 X（大於 CANVAS_WIDTH，確保於任何寬螢幕右側外生成）
 OBSTACLE_SPAWN_X      = 1400
+# 障礙物消失 X（與出生點對稱，確保於任何寬螢幕左側外才移除，避免寬螢幕下障礙物提早消失）
+OBSTACLE_DESPAWN_X    = -(OBSTACLE_SPAWN_X - CANVAS_WIDTH)   # = -600
 
 # 支援多種障礙物尺寸（type -> (w,h)），可擴充更多種類
 OBSTACLE_SIZES = {
