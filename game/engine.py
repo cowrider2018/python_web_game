@@ -233,8 +233,15 @@ def game_loop() -> None:
 
             # 更新障礙物朝向：依其速度向量決定角度（使火球朝運動方向偏轉）
             try:
-                obs_vx = obs.get('vx', OBSTACLE_SPEED)
+                # 注意：普通石塊的 vx 存儲的是速度大小，實際移動時 x -= vx（向左）
+                # 火球的 vx 是有符號速度：x += vx（可向左或向右）
                 obs_vy = obs.get('vy', 0.0)
+                if obs.get('is_fireball'):
+                    # 火球直接使用 vx（已是有符號速度）
+                    obs_vx = obs.get('vx', P2_UPSKILL_FIREBALL_VX)
+                else:
+                    # 普通石塊：vx 是速度大小，實際移動是向左，所以取負
+                    obs_vx = -obs.get('vx', OBSTACLE_SPEED)
                 obs['angle'] = math.atan2(obs_vy, obs_vx)
             except Exception:
                 obs['angle'] = obs.get('angle', 0.0)
@@ -401,6 +408,7 @@ def game_loop() -> None:
                 'type':              'stone',
                 'w':                 sw,
                 'h':                 sh,
+                'angle':             0.0,  # 初始水平，每 tick 根據速度向量更新
             })
 
         # ── 6. 地面外觀動畫推進 ─────────────────────────────

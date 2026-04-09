@@ -84,7 +84,31 @@ const Renderer = (() => {
             prevAlpha = ctx.globalAlpha;
             ctx.globalAlpha = alpha;
         }
-        ctx.drawImage(img, obs.x + (obs._offsetX || 0), obs.y - h + (obs._offsetY || 0), w, h);
+        
+        // 绘制位置（偏移考虑）
+        const drawX = obs.x + (obs._offsetX || 0);
+        const drawY = obs.y - h + (obs._offsetY || 0);
+        const centerX = drawX + w / 2;
+        const centerY = drawY + h / 2;
+        
+        // 火球或障碍物落地时，角度一律设为 Math.PI/2
+        let displayAngle = obs.angle !== undefined ? obs.angle : 0;
+        if (obs.y >= cfg.GROUND_Y) {
+            displayAngle = Math.PI / 2;
+        }
+        
+        // 如果有角度信息，根据运动轨迹旋转绘制（石块随速度方向偏转）
+        if (displayAngle !== 0) {
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(displayAngle - Math.PI/2);  // 加 90 度使默认朝上改为朝右
+            ctx.drawImage(img, -w / 2, -h / 2, w, h);
+            ctx.restore();
+        } else {
+            // 无角度或角度为 0，正常绘制
+            ctx.drawImage(img, drawX, drawY, w, h);
+        }
+        
         if (prevAlpha !== null) ctx.globalAlpha = prevAlpha;
     }
 
