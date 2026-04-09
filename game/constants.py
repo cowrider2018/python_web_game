@@ -30,6 +30,8 @@ GROUND_ANIM_VY_START      = -5.0   # 地面外觀初始向上速度
 # ---- 障礙物 ----
 OBSTACLE_SPEED        = 5     # 每 TICK 水平移動像素
 SPAWN_INTERVAL_TICKS  = 300   # 每隔幾 TICK 生成一個障礙物
+# 障礙物出生 X（大於 CANVAS_WIDTH，確保於任何寬螢幕右側外生成）
+OBSTACLE_SPAWN_X      = 1400
 
 # 支援多種障礙物尺寸（type -> (w,h)），可擴充更多種類
 OBSTACLE_SIZES = {

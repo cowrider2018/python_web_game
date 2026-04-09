@@ -42,14 +42,37 @@
         }
     });
 
+    // ── 畫布尺寸：永遠填滿螢幕，但邏輯寬度最小 = CANVAS_WIDTH ──
+    //   寬螢幕(橫式)：邏輯高 600，寬依比例延伸
+    //   窄螢幕(直式)：邏輯寬 800，高依比例延伸（多出的空間為天空）
+    function resizeCanvas() {
+        const vw    = window.innerWidth;
+        const vh    = window.innerHeight;
+        const baseW = GameConfig.CANVAS_WIDTH  || 800;
+        const baseH = GameConfig.CANVAS_HEIGHT || 600;
+        let logW, logH;
+        if (vw / vh >= baseW / baseH) {
+            // 寬螢幕：高固定，寬延伸
+            logH = baseH;
+            logW = Math.round(baseH * vw / vh);
+        } else {
+            // 窄螢幕：寬鎖定最小值，高往上延伸補滿天空
+            logW = baseW;
+            logH = Math.round(baseW * vh / vw);
+        }
+        canvas.width  = logW;
+        canvas.height = logH;
+    }
+
+    window.addEventListener('resize', resizeCanvas);
+
     // ── 等待 config + sprites 都準備好再啟動 ──
     let _configOk  = false;
     let _spritesOk = false;
 
     function tryStart() {
         if (!_configOk || !_spritesOk) return;
-        canvas.width  = GameConfig.CANVAS_WIDTH;
-        canvas.height = GameConfig.CANVAS_HEIGHT;
+        resizeCanvas();
         Input.init(canvas);
         Renderer.startLoop(canvas, scoreDisplay);
     }

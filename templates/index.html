@@ -2,12 +2,36 @@
 <html lang="zh-Hant">
 <head>
     <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>PWG</title>
     <style>
-        body   { text-align: center; background-color: #333; color: white; font-family: Arial, sans-serif; }
-        canvas { background-color: #87ceeb; border: 5px solid #555; display: block; margin: 20px auto; touch-action: none; position: relative; }
+        html, body {
+            margin: 0; padding: 0;
+            width: 100%; height: 100%;
+            overflow: hidden;
+            background: #87ceeb;
+            font-family: Arial, sans-serif;
+        }
+        canvas {
+            display: block;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            touch-action: none;
+        }
+        /* 分數：固定在右上角 */
+        #scoreDisplay {
+            position: fixed;
+            top: 12px; right: 16px;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+            text-shadow: 1px 1px 3px rgba(0,0,0,0.7);
+            z-index: 10;
+            pointer-events: none;
+        }
         #statusText {
-            position: absolute;
+            position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
@@ -27,11 +51,9 @@
     </style>
 </head>
 <body>
-    <div style="position: relative; display: inline-block;">
-        <canvas id="gameCanvas" width="800" height="600"></canvas>
-        <div id="statusText"></div>
-    </div>
-    <h2 id="scoreDisplay">Score: 0</h2>
+    <canvas id="gameCanvas"></canvas>
+    <div id="scoreDisplay">Score: 0</div>
+    <div id="statusText"></div>
     <audio id="p2SoundRoar" preload="auto">
         <source src="{{ url_for('static', filename='audio/p2_upsk.mp3') }}" type="audio/mpeg">
     </audio>

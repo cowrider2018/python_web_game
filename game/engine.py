@@ -389,7 +389,7 @@ def game_loop() -> None:
             spawn_t = 0
             sw, sh = OBSTACLE_SIZES['stone']
             gs.game_state['obstacles'].append({
-                'x':                 CANVAS_WIDTH,
+                'x':                 OBSTACLE_SPAWN_X,
                 'y':                 GROUND_Y,
                 'scored':            False,
                 'jumping':           False,
