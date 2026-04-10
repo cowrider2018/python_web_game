@@ -191,7 +191,9 @@ const Renderer = (() => {
             const ch = canvas.height;
             // 計算偏移：寬螢幕時 offsetX 水平居中，窄螢幕時 offsetY 垂直延伸天空
             const offsetX = Math.max(0, cw - cfg.CANVAS_WIDTH) / 2;
-            const offsetY = Math.max(0, ch - cfg.CANVAS_HEIGHT);
+            const extraSky = Math.max(0, ch - cfg.CANVAS_HEIGHT);
+            const safeUpShift = Math.round(ch * 0.3)
+            const offsetY = extraSky - safeUpShift;
 
             // 全畫布填天空色
             ctx.clearRect(0, 0, cw, ch);
