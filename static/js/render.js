@@ -200,12 +200,6 @@ const Renderer = (() => {
             ctx.fillStyle = '#87ceeb';
             ctx.fillRect(0, 0, cw, ch);
 
-            // 地面：從邊界到邊界（水平和豎直都完整）
-            const groundOffset = state?.ground_animation?.offset ?? 0;
-            const groundDrawY = cfg.GROUND_Y + groundOffset + offsetY;
-            ctx.fillStyle = '#2d5016';
-            ctx.fillRect(0, groundDrawY, cw, ch - groundDrawY);
-
             // 背景樹：依指定頻率、大小與速度出現，僅作背景裝飾
             // 樹木高度要鎖定在靜態地板高度，不會跟隨 downskill 振起的地面偏移
             const treeGroundDrawY = cfg.GROUND_Y + offsetY;
@@ -221,6 +215,12 @@ const Renderer = (() => {
                 _drawTree(ctx, tree);
             });
             _trees = _trees.filter(tree => tree.x + tree.w > 0);
+
+            // 地面：從邊界到邊界（水平和豎直都完整），並置於樹之上
+            const groundOffset = state?.ground_animation?.offset ?? 0;
+            const groundDrawY = cfg.GROUND_Y + groundOffset + offsetY;
+            ctx.fillStyle = '#2d5016';
+            ctx.fillRect(0, groundDrawY, cw, ch - groundDrawY);
 
             if (state) {
                 // 玩家
