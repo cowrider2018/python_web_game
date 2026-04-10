@@ -33,8 +33,8 @@ const Network = (() => {
         reset:     ()      => socket.emit('request_reset'),
         jump:      (role, dx = 0)  => socket.emit('jump', { role, dx }),
         move:      (role, dir) => socket.emit('move', { role, dir }),
-        swipeUp:   ()      => socket.emit('swipe_up', {}),
-        swipeDown: ()      => socket.emit('swipe_down', {}),
+        swipeUp:   (role, dx = 0)  => socket.emit('swipe_up', { role, dx }),
+        swipeDown: (role, dx = 0)  => socket.emit('swipe_down', { role, dx }),
 
         // 唯讀狀態
         get assigned()    { return _assigned;    },

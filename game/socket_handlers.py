@@ -185,13 +185,21 @@ def register(socketio) -> None:
         if not on_ground_or_obs or player.get('skillLocked'):
             return
 
+        try:
+            raw_dx = float(data.get('dx', 0))
+        except Exception:
+            raw_dx = 0.0
+        jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
+
         player['vel']                = P2_UPSKILL_JUMP_VY
+        player['jump_h_vel']         = jump_h_vel
+        player['vel_x']              = jump_h_vel
         player['isJumping']          = True
         player['skillLocked']        = True
         player['standing_on'] = None  # Clear standing state when jumping
         player['upskill_spawn_tick'] = 0
         gs.apply_sprite_schedule(player, P2_SKILL_SETS['upskill'])
-        print(f"[swipe_up] P2 upskill triggered")
+        print(f"[swipe_up] P2 upskill triggered dx={raw_dx:.1f} h_vel={jump_h_vel:.2f}")
 
     @socketio.on('swipe_down')
     def handle_swipe_down(data):
@@ -212,10 +220,18 @@ def register(socketio) -> None:
         if not on_ground_or_obs or player.get('skillLocked'):
             return
 
+        try:
+            raw_dx = float(data.get('dx', 0))
+        except Exception:
+            raw_dx = 0.0
+        jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
+
         player['vel']                    = P2_DOWNSKILL_JUMP_VY
+        player['jump_h_vel']             = jump_h_vel
+        player['vel_x']                  = jump_h_vel
         player['isJumping']              = True
         player['skillLocked']            = True
         player['standing_on'] = None  # Clear standing state when jumping
         player['downskill_pending_land'] = True
         gs.apply_sprite_schedule(player, P2_SKILL_SETS['downskill'])
-        print(f"[swipe_down] P2 downskill triggered")
+        print(f"[swipe_down] P2 downskill triggered dx={raw_dx:.1f} h_vel={jump_h_vel:.2f}")

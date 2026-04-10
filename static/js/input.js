@@ -72,20 +72,23 @@ const Input = (() => {
             const dy = pointerCurrentY - pointerStartY;
             Network.move(Network.assigned, 0);
 
-            const horizontalMoved = Math.abs(dx) > moveThreshold;
-            const verticalMoved = Math.abs(dy) > jumpThreshold;
+            const absDX = Math.abs(dx);
+            const absDY = Math.abs(dy);
+            const isHorizontalDominant = absDX >= absDY;
+            const horizontalMoved = absDX > moveThreshold;
+            const verticalMoved = absDY > jumpThreshold;
 
             if (Network.assigned !== 2) {
-                if (verticalMoved) {
+                if (!isHorizontalDominant && verticalMoved) {
                     Network.jump(Network.assigned, dx);
                 }
                 return;
             }
 
-            if (verticalMoved && Math.abs(dy) > Math.abs(dx)) {
-                dy < 0 ? Network.swipeUp() : Network.swipeDown();
-            } else if (!horizontalMoved && verticalMoved) {
-                Network.jump(Network.assigned, dx);
+            if (!isHorizontalDominant && verticalMoved) {
+                dy < 0 ? Network.swipeUp(Network.assigned, dx) : Network.swipeDown(Network.assigned, dx);
+            } else if (isHorizontalDominant && horizontalMoved) {
+                // Horizontal dominant gesture for P2: movement is already handled by pointermove.
             }
         }, { passive: false });
 
