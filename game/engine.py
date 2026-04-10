@@ -183,13 +183,38 @@ def _spawn_upskill_fireball(player, role):
 # 玩家物理
 # ============================================================
 
+def _apply_player_horizontal(role, player):
+    """Apply horizontal acceleration or friction and move the player in X."""
+    move_dir = player.get('move_dir', 0)
+    if move_dir != 0:
+        player['vel_x'] += move_dir * PLAYER_H_ACCEL
+    else:
+        player['vel_x'] *= PLAYER_H_FRICTION
+        if abs(player['vel_x']) < 0.1:
+            player['vel_x'] = 0.0
+
+    player['vel_x'] = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, player['vel_x']))
+    player['x'] += player['vel_x']
+
+    min_x = 0
+    max_x = CANVAS_WIDTH - PLAYER_WIDTH[role]
+    if player['x'] < min_x:
+        player['x'] = min_x
+        player['vel_x'] = 0.0
+    elif player['x'] > max_x:
+        player['x'] = max_x
+        player['vel_x'] = 0.0
+
+
 def _tick_player_physics(role, player, sio):
-    """單一玩家每 tick：_apply_gravity → 移動 → 觸地結算 → upskill 火球計時。"""
+    """單一玩家每 tick：水平移動 → 重力 → 垂直移動 → 觸地結算 → upskill 火球計時。"""
     gt = gs.ground_top(role)
     if player['y'] >= gt and player['vel'] == 0.0:
-        return  # 靜止在地面，略過
+        _apply_player_horizontal(role, player)
+        return
 
     _apply_gravity(player)
+    _apply_player_horizontal(role, player)
 
     # P2 upskill 火球生成計時
     if role == 2 and player.get('upskill_spawn_tick', -1) >= 0:

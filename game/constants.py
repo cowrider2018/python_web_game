@@ -12,9 +12,12 @@ CANVAS_HEIGHT = 600
 GROUND_Y      = CANVAS_HEIGHT - 40   # 地面底邊 Y
 
 # ---- 玩家 (indexed by role: 0=unused, 1=P1, 2=P2) ----
-PLAYER_WIDTH  = [0, 64, 128]      # [unused, P1_width, P2_width]
+PLAYER_WIDTH  = [0, 64, 128]      # [unused, P1_width, P1_width, P2_width]
 PLAYER_HEIGHT = [0, 64, 128]      # [unused, P1_height, P2_height]
 GRAVITY       = 0.6
+PLAYER_H_ACCEL = 0.5              # 水平等加速度
+PLAYER_H_MAX_VX = 8.0             # 水平最大速度
+PLAYER_H_FRICTION = 0.85          # 無輸入時摩擦減速
 
 P1_JUMP_VY        = -15.0   # 一段跳初速（向上為負）
 P1_DOUBLE_JUMP_VY = -12.0   # 二段跳初速

@@ -129,6 +129,27 @@ def register(socketio) -> None:
             player['canDouble'] = False
             print(f"[jump] role={role} 二段跳")
 
+    @socketio.on('move')
+    def handle_move(data):
+        """Pointer move 事件：動態設定左右移動方向。"""
+        role      = gs._parse_role(data)
+        client_id = session.get('client_id')
+        if not gs._owns(role, client_id):
+            return
+        player = gs.game_state['players'].get(role)
+        if not player or not player['active'] or gs.game_state['gameOver']:
+            return
+        if gs.game_state.get('dying'):
+            return
+
+        try:
+            move_dir = int(data.get('dir', 0))
+        except Exception:
+            return
+        if move_dir not in (-1, 0, 1):
+            return
+        player['move_dir'] = move_dir
+
     # ---- P2 輸入 ----
 
     @socketio.on('swipe_up')

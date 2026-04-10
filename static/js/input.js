@@ -2,42 +2,66 @@
 // Input - 統一 Pointer（觸控 + 滑鼠）與鍵盤輸入
 // ============================================================
 const Input = (() => {
-    const SWIPE_THRESHOLD = 30;
     let pointerStartX = 0;
     let pointerStartY = 0;
+    let moveThreshold = 0;
+    let jumpThreshold = 0;
 
     function init(canvas) {
+        const canvasWidth  = canvas.clientWidth || window.innerWidth;
+        const canvasHeight = canvas.clientHeight || window.innerHeight;
+        moveThreshold = Math.max(1, Math.floor(canvasWidth * 0.1));
+        jumpThreshold = Math.max(1, Math.floor(canvasHeight * 0.1));
+
         // ── Pointer（觸控 + 滑鼠統一）──
         canvas.addEventListener('pointerdown', e => {
             e.preventDefault();
             try { canvas.setPointerCapture(e.pointerId); } catch (_) {}
             pointerStartX = e.clientX;
             pointerStartY = e.clientY;
+        }, { passive: false });
 
-            // P1（非 P2）：按下即跳
-            if (Network.assigned !== 0 && Network.assigned !== 2) {
-                const state = Network.latestState;
-                if (!state) { return; }
-                if (state.gameOver) { Network.reset(); return; }
-                if (state.dying) { return; }
-                Network.jump(Network.assigned);
-            }
+        canvas.addEventListener('pointermove', e => {
+            if (Network.assigned === 0) return;
+            const state = Network.latestState;
+            if (!state) return;
+            if (state.gameOver || state.dying) return;
+
+            const dx = e.clientX - pointerStartX;
+            let dir = 0;
+            if (dx > moveThreshold) dir = 1;
+            else if (dx < -moveThreshold) dir = -1;
+            Network.move(Network.assigned, dir);
         }, { passive: false });
 
         canvas.addEventListener('pointerup', e => {
             e.preventDefault();
             try { canvas.releasePointerCapture(e.pointerId); } catch (_) {}
 
-            // P2：鬆開時判斷上 / 下滑
-            if (Network.assigned !== 2) return;
+            if (Network.assigned === 0) return;
             const state = Network.latestState;
             if (!state) return;
             if (state.gameOver) { Network.reset(); return; }
             if (state.dying) return;
+
             const dx = e.clientX - pointerStartX;
             const dy = e.clientY - pointerStartY;
-            if (Math.abs(dy) > SWIPE_THRESHOLD && Math.abs(dy) > Math.abs(dx)) {
+            Network.move(Network.assigned, 0);
+
+            const horizontalMoved = Math.abs(dx) > moveThreshold;
+            const verticalMoved = Math.abs(dy) > jumpThreshold;
+
+            if (Network.assigned !== 2) {
+                if (verticalMoved) {
+                    Network.jump(Network.assigned);
+                }
+                return;
+            }
+
+            if (verticalMoved && Math.abs(dy) > Math.abs(dx)) {
                 dy < 0 ? Network.swipeUp() : Network.swipeDown();
+            } else if (!horizontalMoved && verticalMoved) {
+                Network.jump(Network.assigned);
             }
         }, { passive: false });
 

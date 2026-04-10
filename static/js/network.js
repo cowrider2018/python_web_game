@@ -32,6 +32,7 @@ const Network = (() => {
         leave:     ()      => socket.emit('leave'),
         reset:     ()      => socket.emit('request_reset'),
         jump:      (role)  => socket.emit('jump', { role }),
+        move:      (role, dir) => socket.emit('move', { role, dir }),
         swipeUp:   ()      => socket.emit('swipe_up', {}),
         swipeDown: ()      => socket.emit('swipe_down', {}),
 

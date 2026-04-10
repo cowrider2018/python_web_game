@@ -50,6 +50,8 @@ def rebuild_players() -> None:
             'x':                     x,
             'y':                     ground_top(slot),
             'vel':                   0.0,
+            'vel_x':                 0.0,
+            'move_dir':              0,
             'active':                active,
             'name':                  SLOT_NAMES.get(slot, f'P{slot}'),
             'sprite':                P2_SPRITE_NORMAL if slot == 2 else P1_SPRITE,
