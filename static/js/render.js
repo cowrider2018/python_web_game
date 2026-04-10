@@ -182,13 +182,18 @@ const Renderer = (() => {
         const ctx = canvas.getContext('2d');
         _trees = [];
         _treeSpawnCountdown = _nextTreeSpawnInterval(GameConfig);
+        let _lastFrameTime = null;
+        const BASE_FRAME_RATE = 120; // 用於將原始 tick 速度轉為時間基準
 
-        function update() {
+        function update(now) {
             const cfg   = GameConfig;
             const state = Network.latestState;
             const gameTime = Date.now();
             const cw = canvas.width;
             const ch = canvas.height;
+            const deltaMs = _lastFrameTime === null ? 0 : now - _lastFrameTime;
+            _lastFrameTime = now;
+            const deltaSeconds = Math.min(deltaMs / 1000, 0.1);
             // 計算偏移：寬螢幕時 offsetX 水平居中，窄螢幕時 offsetY 垂直延伸天空
             const offsetX = Math.max(0, cw - cfg.CANVAS_WIDTH) / 2;
             const extraSky = Math.max(0, ch - cfg.CANVAS_HEIGHT);
@@ -207,11 +212,11 @@ const Renderer = (() => {
                 _spawnTree(cfg, cw, treeGroundDrawY);
                 _treeSpawnCountdown = _nextTreeSpawnInterval(cfg);
             } else {
-                _treeSpawnCountdown -= 1;
+                _treeSpawnCountdown -= deltaSeconds * BASE_FRAME_RATE;
             }
             _trees.sort((a, b) => a.normalized - b.normalized);
             _trees.forEach(tree => {
-                tree.x -= tree.speed;
+                tree.x -= tree.speed * deltaSeconds * BASE_FRAME_RATE;
                 _drawTree(ctx, tree);
             });
             _trees = _trees.filter(tree => tree.x + tree.w > 0);
