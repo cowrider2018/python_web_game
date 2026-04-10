@@ -185,13 +185,17 @@ def _spawn_upskill_fireball(player, role):
 
 def _apply_player_horizontal(role, player):
     """Apply horizontal acceleration or friction and move the player in X."""
-    move_dir = player.get('move_dir', 0)
-    if move_dir != 0:
-        player['vel_x'] += move_dir * PLAYER_H_ACCEL
+    gt = gs.ground_top(role)
+    if player.get('isJumping', False) and player['y'] < gt:
+        player['vel_x'] = player.get('jump_h_vel', player.get('vel_x', 0.0))
     else:
-        player['vel_x'] *= PLAYER_H_FRICTION
-        if abs(player['vel_x']) < 0.1:
-            player['vel_x'] = 0.0
+        move_dir = player.get('move_dir', 0)
+        if move_dir != 0:
+            player['vel_x'] += move_dir * PLAYER_H_ACCEL
+        else:
+            player['vel_x'] *= PLAYER_H_FRICTION
+            if abs(player['vel_x']) < 0.1:
+                player['vel_x'] = 0.0
 
     player['vel_x'] = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, player['vel_x']))
     player['x'] += player['vel_x']
@@ -228,6 +232,7 @@ def _tick_player_physics(role, player, sio):
         was_jumping         = player.get('isJumping', False)
         player['y']         = gt
         player['vel']       = 0.0
+        player['jump_h_vel'] = 0.0
         player['isJumping'] = False
         player['canDouble'] = True
         if role == 2:

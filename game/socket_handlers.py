@@ -9,6 +9,7 @@ from game.constants import (
     P1_JUMP_VY, P1_DOUBLE_JUMP_VY,
     P2_UPSKILL_JUMP_VY, P2_DOWNSKILL_JUMP_VY,
     P2_SKILL_SETS,
+    PLAYER_H_MAX_VX, PLAYER_JUMP_H_VELOCITY_SCALE,
 )
 
 
@@ -118,16 +119,29 @@ def register(socketio) -> None:
         # Can jump if on ground OR standing on an obstacle
         on_ground = player['y'] >= gt - 1 or player.get('standing_on') is not None
 
+        try:
+            raw_dx = float(data.get('dx', 0))
+        except Exception:
+            raw_dx = 0.0
+
         if on_ground:
+            jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
             player['vel']       = P1_JUMP_VY
+            player['jump_h_vel'] = jump_h_vel
+            player['vel_x']     = jump_h_vel
             player['isJumping'] = True
             player['canDouble'] = True
             player['standing_on'] = None  # Clear standing state when jumping
-            print(f"[jump] role={role} 一段跳")
+            print(f"[jump] role={role} 一段跳 dx={raw_dx:.1f} h_vel={jump_h_vel:.2f}")
         elif role == 1 and player.get('canDouble', False):
+            jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
             player['vel']       = P1_DOUBLE_JUMP_VY
+            player['jump_h_vel'] = jump_h_vel
+            player['vel_x']     = jump_h_vel
             player['canDouble'] = False
-            print(f"[jump] role={role} 二段跳")
+            player['isJumping'] = True
+            player['standing_on'] = None
+            print(f"[jump] role={role} 二段跳 dx={raw_dx:.1f} h_vel={jump_h_vel:.2f}")
 
     @socketio.on('move')
     def handle_move(data):

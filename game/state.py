@@ -51,6 +51,7 @@ def rebuild_players() -> None:
             'y':                     ground_top(slot),
             'vel':                   0.0,
             'vel_x':                 0.0,
+            'jump_h_vel':            0.0,
             'move_dir':              0,
             'active':                active,
             'name':                  SLOT_NAMES.get(slot, f'P{slot}'),

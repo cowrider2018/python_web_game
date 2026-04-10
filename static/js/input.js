@@ -77,7 +77,7 @@ const Input = (() => {
 
             if (Network.assigned !== 2) {
                 if (verticalMoved) {
-                    Network.jump(Network.assigned);
+                    Network.jump(Network.assigned, dx);
                 }
                 return;
             }
@@ -85,7 +85,7 @@ const Input = (() => {
             if (verticalMoved && Math.abs(dy) > Math.abs(dx)) {
                 dy < 0 ? Network.swipeUp() : Network.swipeDown();
             } else if (!horizontalMoved && verticalMoved) {
-                Network.jump(Network.assigned);
+                Network.jump(Network.assigned, dx);
             }
         }, { passive: false });
 
