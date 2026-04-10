@@ -73,21 +73,25 @@ const Input = (() => {
             Network.move(Network.assigned, 0);
 
             const absDX = Math.abs(dx);
-            const absDY = Math.abs(dy);
-            const isHorizontalDominant = absDX >= absDY;
+            const isHorizontalDominant = absDX >= Math.abs(dy);
             const horizontalMoved = absDX > moveThreshold;
-            const verticalMoved = absDY > jumpThreshold;
 
             if (Network.assigned !== 2) {
-                if (verticalMoved && dy < 0) {
+                // P1: only horizontal threshold matters; jump when touch moved upward relative to start
+                if (pointerCurrentY < pointerStartY) {
                     Network.jump(Network.assigned, dx);
                 }
                 return;
             }
 
-            if (!isHorizontalDominant && verticalMoved) {
+            // P2 behavior (unchanged): use vertical/horizontal thresholds for skill gestures
+            const absDY = Math.abs(dy);
+            const verticalMoved = absDY > jumpThreshold;
+            const isHoriz = isHorizontalDominant;
+
+            if (!isHoriz && verticalMoved) {
                 dy < 0 ? Network.swipeUp(Network.assigned, dx) : Network.swipeDown(Network.assigned, dx);
-            } else if (isHorizontalDominant && horizontalMoved) {
+            } else if (isHoriz && horizontalMoved) {
                 // Horizontal dominant gesture for P2: movement is already handled by pointermove.
             }
         }, { passive: false });
