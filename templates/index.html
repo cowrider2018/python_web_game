@@ -19,6 +19,17 @@
             width: 100vw; height: 100vh;
             touch-action: none;
             cursor: pointer;
+            /* 禁止選取文字（避免反藍） */
+            -webkit-user-select: none;  /* Chrome, Safari, Opera */
+            -moz-user-select: none;     /* Firefox */
+            -ms-user-select: none;      /* IE/Edge */
+            user-select: none;
+
+            /* 移除行動裝置點擊時的藍色高亮框 */
+            -webkit-tap-highlight-color: rgba(0, 0, 0, 0);
+
+            /* 移除長按時出現的系統選單（如儲存圖片） */
+            -webkit-touch-callout: none;
         }
         /* 分數：固定在右上角 */
         #scoreDisplay {
