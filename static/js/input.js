@@ -79,7 +79,7 @@ const Input = (() => {
             const verticalMoved = absDY > jumpThreshold;
 
             if (Network.assigned !== 2) {
-                if (verticalMoved) {
+                if (verticalMoved && dy < 0) {
                     Network.jump(Network.assigned, dx);
                 }
                 return;
