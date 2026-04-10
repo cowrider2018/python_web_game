@@ -59,6 +59,75 @@ const Renderer = (() => {
 
     let _trees = [];
     let _treeSpawnCountdown = 0;
+    let _pointerParticles = [];
+    let _pointerParticleStepTimer = 0;
+
+    function _createPointerParticle(hint, t) {
+        const dx = hint.currentX - hint.startX;
+        const dy = hint.currentY - hint.startY;
+        const lineDist = Math.max(Math.hypot(dx, dy), 1);
+        const normalX = -(dy / lineDist);
+        const normalY = dx / lineDist;
+        const normalOffset = (t - 0.5) * lineDist * 0.5;
+
+        _pointerParticles.push({
+            x: hint.startX,
+            y: hint.startY,
+            t,
+            speedFactor: 0.3 + t * 0.7,
+            alpha: 0.5,
+            radius: 6,
+            life: 1.5,
+            normalOffset,
+            normalX,
+            normalY,
+        });
+    }
+
+    function _ensurePointerParticles(hint) {
+        if (_pointerParticles.length === 0) {
+            for (let i = 0; i < 10; i++) {
+                _createPointerParticle(hint, i / 9);
+            }
+            return;
+        }
+        while (_pointerParticles.length < 10) {
+            _createPointerParticle(hint, Math.random());
+        }
+        if (_pointerParticles.length > 10) {
+            _pointerParticles.length = 10;
+        }
+    }
+
+    function _stepPointerParticles(hint) {
+        const dx = hint.currentX - hint.startX;
+        const dy = hint.currentY - hint.startY;
+        const lineDist = Math.max(Math.hypot(dx, dy), 1);
+        const lineDirX = dx / lineDist;
+        const lineDirY = dy / lineDist;
+        const normalX = -lineDirY;
+        const normalY = lineDirX;
+
+        _pointerParticles = _pointerParticles.filter(p => {
+            const desiredX = hint.startX + lineDirX * lineDist * p.t + normalX * p.normalOffset;
+            const desiredY = hint.startY + lineDirY * lineDist * p.t + normalY * p.normalOffset;
+            p.x = desiredX;
+            p.y = desiredY;
+            return true;
+        });
+    }
+
+    function _drawPointerParticles(ctx, baseRgb) {
+        ctx.save();
+        const rgb = baseRgb || '255,255,255';
+        _pointerParticles.forEach(p => {
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${rgb},${p.alpha})`;
+            ctx.fill();
+        });
+        ctx.restore();
+    }
 
     // 在離屏 canvas 上完成染色，只影響有像素的區域，返回處理完的 canvas
     function _buildTintedTreeCanvas(w, h, tintStrength) {
@@ -178,31 +247,60 @@ const Renderer = (() => {
         if (prevAlpha !== null) ctx.globalAlpha = prevAlpha;
     }
 
-    function _drawPointerHint(ctx) {
+    function _drawPointerHint(ctx, gameTime) {
         if (typeof Input === 'undefined' || !Input.getPointerHint) return;
         const hint = Input.getPointerHint();
         if (!hint) return;
 
         const dx = hint.currentX - hint.startX;
         const dy = hint.currentY - hint.startY;
-        const horizontalMoved = Math.abs(dx) > hint.moveThreshold;
-        const verticalMoved = Math.abs(dy) > hint.jumpThreshold;
-        const color = (horizontalMoved || verticalMoved) ? 'red' : 'white';
+        const absDX = Math.abs(dx);
+        const absDY = Math.abs(dy);
+        const horizontalMoved = absDX > hint.moveThreshold;
+        const verticalMoved = absDY > hint.jumpThreshold;
+        const isHorizontalDominant = absDX >= absDY;
 
-        const stepSize = 10;
-        const distance = Math.hypot(dx, dy);
-        const steps = Math.max(1, Math.floor(distance / stepSize));
-        const stepX = dx / steps;
-        const stepY = dy / steps;
-        let x = hint.startX;
-        let y = hint.startY;
+        let actionLabel = null;
+        if (Network.assigned === 2) {
+            if (!isHorizontalDominant) {
+                actionLabel = dy < 0 ? 'upskill' : 'downskill';
+            } else {
+                actionLabel = 'walk';
+            }
+        } else if (Network.assigned === 1) {
+            actionLabel = dy < 0 ? 'jump' : 'run';
+        }
 
+        // highlight when gesture exceeds thresholds
+        let highlight = false;
+        if (Network.assigned === 2) {
+            highlight = horizontalMoved || verticalMoved;
+        } else {
+            // P1: only horizontal threshold or upward movement (currentY < startY)
+            highlight = horizontalMoved || (hint.currentY < hint.startY);
+        }
+        const baseRgb = highlight ? '255,215,0' : '255,255,255';
+
+        _drawPointerParticles(ctx, baseRgb);
+
+        const pulsePhase = (gameTime % 200) / 200;
+        const pulseRadius = Math.round(pulsePhase * 60);
+        const pulseAlpha = Math.max(0, 0.3 * (1 - pulsePhase));
         ctx.save();
-        ctx.fillStyle = color;
-        for (let i = 0; i <= steps; i++) {
-            ctx.fillRect(Math.round(x - 5), Math.round(y - 5), 10, 10);
-            x += stepX;
-            y += stepY;
+        ctx.beginPath();
+        ctx.arc(hint.startX, hint.startY, pulseRadius, 0, Math.PI * 2);
+        ctx.fillStyle = `rgba(${baseRgb}, ${pulseAlpha})`;
+        ctx.fill();
+
+        if (actionLabel) {
+            ctx.font = '16px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.strokeStyle = 'rgba(0, 0, 0, 0.7)';
+            ctx.lineWidth = 4;
+            ctx.strokeText(actionLabel, hint.startX, hint.startY);
+            ctx.fillStyle = highlight ? '#FFD700' : '#fff';
+            ctx.fillText(actionLabel, hint.startX, hint.startY);
         }
         ctx.restore();
     }
@@ -250,13 +348,26 @@ const Renderer = (() => {
             });
             _trees = _trees.filter(tree => tree.x + tree.w > 0);
 
+            const hint = Input.getPointerHint();
+            if (hint) {
+                _ensurePointerParticles(hint);
+                _pointerParticleStepTimer += deltaSeconds;
+                while (_pointerParticleStepTimer >= 0.025) {
+                    _pointerParticleStepTimer -= 0.025;
+                    _stepPointerParticles(hint);
+                }
+            } else {
+                _pointerParticles = [];
+                _pointerParticleStepTimer = 0;
+            }
+
             // 地面：從邊界到邊界（水平和豎直都完整），並置於樹之上
             const groundOffset = state?.ground_animation?.offset ?? 0;
             const groundDrawY = cfg.GROUND_Y + groundOffset + offsetY;
             ctx.fillStyle = '#2d5016';
             ctx.fillRect(0, groundDrawY, cw, ch - groundDrawY);
 
-            _drawPointerHint(ctx);
+            _drawPointerHint(ctx, gameTime);
 
             if (state) {
                 // 玩家
