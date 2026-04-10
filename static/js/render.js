@@ -178,6 +178,35 @@ const Renderer = (() => {
         if (prevAlpha !== null) ctx.globalAlpha = prevAlpha;
     }
 
+    function _drawPointerHint(ctx) {
+        if (typeof Input === 'undefined' || !Input.getPointerHint) return;
+        const hint = Input.getPointerHint();
+        if (!hint) return;
+
+        const dx = hint.currentX - hint.startX;
+        const dy = hint.currentY - hint.startY;
+        const horizontalMoved = Math.abs(dx) > hint.moveThreshold;
+        const verticalMoved = Math.abs(dy) > hint.jumpThreshold;
+        const color = (horizontalMoved || verticalMoved) ? 'red' : 'white';
+
+        const stepSize = 10;
+        const distance = Math.hypot(dx, dy);
+        const steps = Math.max(1, Math.floor(distance / stepSize));
+        const stepX = dx / steps;
+        const stepY = dy / steps;
+        let x = hint.startX;
+        let y = hint.startY;
+
+        ctx.save();
+        ctx.fillStyle = color;
+        for (let i = 0; i <= steps; i++) {
+            ctx.fillRect(Math.round(x - 5), Math.round(y - 5), 10, 10);
+            x += stepX;
+            y += stepY;
+        }
+        ctx.restore();
+    }
+
     function startLoop(canvas, scoreDisplay) {
         const ctx = canvas.getContext('2d');
         _trees = [];
@@ -226,6 +255,8 @@ const Renderer = (() => {
             const groundDrawY = cfg.GROUND_Y + groundOffset + offsetY;
             ctx.fillStyle = '#2d5016';
             ctx.fillRect(0, groundDrawY, cw, ch - groundDrawY);
+
+            _drawPointerHint(ctx);
 
             if (state) {
                 // 玩家
