@@ -9,7 +9,7 @@ from game.constants import (
     P1_JUMP_VY, P1_DOUBLE_JUMP_VY,
     P2_UPSKILL_JUMP_VY, P2_DOWNSKILL_JUMP_VY,
     P2_SKILL_SETS,
-    PLAYER_H_MAX_VX, PLAYER_JUMP_H_VELOCITY_SCALE,
+    PLAYER_H_MAX_VX,
 )
 
 
@@ -119,29 +119,36 @@ def register(socketio) -> None:
         # Can jump if on ground OR standing on an obstacle
         on_ground = player['y'] >= gt - 1 or player.get('standing_on') is not None
 
-        try:
-            raw_dx = float(data.get('dx', 0))
-        except Exception:
-            raw_dx = 0.0
-
         if on_ground:
-            jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
-            player['vel']       = P1_JUMP_VY
+            try:
+                move_dir = int(data.get('dir', 0))
+                if move_dir not in (-1, 0, 1):
+                    move_dir = 0
+            except Exception:
+                move_dir = 0
+            jump_h_vel = move_dir * PLAYER_H_MAX_VX
+            player['vel']        = P1_JUMP_VY
             player['jump_h_vel'] = jump_h_vel
-            player['vel_x']     = jump_h_vel
-            player['isJumping'] = True
-            player['canDouble'] = True
-            player['standing_on'] = None  # Clear standing state when jumping
-            print(f"[jump] role={role} 一段跳 dx={raw_dx:.1f} h_vel={jump_h_vel:.2f}")
-        elif role == 1 and player.get('canDouble', False):
-            jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
-            player['vel']       = P1_DOUBLE_JUMP_VY
-            player['jump_h_vel'] = jump_h_vel
-            player['vel_x']     = jump_h_vel
-            player['canDouble'] = False
-            player['isJumping'] = True
+            player['vel_x']      = jump_h_vel
+            player['isJumping']  = True
+            player['canDouble']  = True
             player['standing_on'] = None
-            print(f"[jump] role={role} 二段跳 dx={raw_dx:.1f} h_vel={jump_h_vel:.2f}")
+            print(f"[jump] role={role} 一段跳 dir={move_dir} h_vel={jump_h_vel:.2f}")
+        elif role == 1 and player.get('canDouble', False):
+            try:
+                move_dir = int(data.get('dir', 0))
+                if move_dir not in (-1, 0, 1):
+                    move_dir = 0
+            except Exception:
+                move_dir = 0
+            jump_h_vel = move_dir * PLAYER_H_MAX_VX
+            player['vel']        = P1_DOUBLE_JUMP_VY
+            player['jump_h_vel'] = jump_h_vel
+            player['vel_x']      = jump_h_vel
+            player['canDouble']  = False
+            player['isJumping']  = True
+            player['standing_on'] = None
+            print(f"[jump] role={role} 二段跳 dir={move_dir} h_vel={jump_h_vel:.2f}")
 
     @socketio.on('move')
     def handle_move(data):
@@ -154,24 +161,6 @@ def register(socketio) -> None:
         if not player or not player['active'] or gs.game_state['gameOver']:
             return
         if gs.game_state.get('dying'):
-            return
-
-        # Accept either simple dir or full pointer hint
-        hint = data.get('hint', None)
-        if hint is not None:
-            # store latest pointer hint on player for per-tick decision
-            player['pointer_hint'] = hint
-            # also set move_dir for backward compatibility
-            try:
-                dx = float(hint.get('currentX', 0) - hint.get('startX', 0))
-                if dx > hint.get('moveThreshold', 0):
-                    player['move_dir'] = 1
-                elif dx < -hint.get('moveThreshold', 0):
-                    player['move_dir'] = -1
-                else:
-                    player['move_dir'] = 0
-            except Exception:
-                player['move_dir'] = 0
             return
 
         try:

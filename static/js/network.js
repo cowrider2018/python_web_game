@@ -31,9 +31,8 @@ const Network = (() => {
         join:      ()      => socket.emit('join'),
         leave:     ()      => socket.emit('leave'),
         reset:     ()      => socket.emit('request_reset'),
-        jump:      (role, dx = 0)  => socket.emit('jump', { role, dx }),
+        jump:      (role, dir = 0) => socket.emit('jump', { role, dir }),
         move:      (role, dir) => socket.emit('move', { role, dir }),
-        pointerState: (role, hint) => socket.emit('pointer_state', { role, hint }),
         swipeUp:   (role, dx = 0)  => socket.emit('swipe_up', { role, dx }),
         swipeDown: (role, dx = 0)  => socket.emit('swipe_down', { role, dx }),
 

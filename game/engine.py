@@ -184,34 +184,13 @@ def _spawn_upskill_fireball(player, role):
 # ============================================================
 
 def _apply_player_horizontal(role, player):
-    """Apply horizontal acceleration or friction and move the player in X."""
+    """Constant-speed horizontal movement; airborne keeps jump horizontal vel."""
     gt = gs.ground_top(role)
     if player.get('isJumping', False) and player['y'] < gt:
-        player['vel_x'] = player.get('jump_h_vel', player.get('vel_x', 0.0))
+        player['vel_x'] = player.get('jump_h_vel', 0.0)
     else:
-        # Prefer server-stored pointer hint to compute movement per-tick for immediate response
-        hint = player.get('pointer_hint')
-        move_dir = 0
-        if hint:
-            try:
-                dx = float(hint.get('currentX', 0) - hint.get('startX', 0))
-                moveThreshold = hint.get('moveThreshold', 0)
-                if dx > moveThreshold:
-                    move_dir = 1
-                elif dx < -moveThreshold:
-                    move_dir = -1
-                else:
-                    move_dir = 0
-            except Exception:
-                move_dir = player.get('move_dir', 0)
-        else:
-            move_dir = player.get('move_dir', 0)
-
-        # Apply instantaneous constant speed based on move_dir
-        if move_dir != 0:
-            player['vel_x'] = move_dir * PLAYER_H_MAX_VX
-        else:
-            player['vel_x'] = 0.0
+        move_dir = player.get('move_dir', 0)
+        player['vel_x'] = move_dir * PLAYER_H_MAX_VX if move_dir != 0 else 0.0
 
     player['vel_x'] = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, player['vel_x']))
     player['x'] += player['vel_x']

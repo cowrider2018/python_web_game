@@ -10,6 +10,10 @@ const Input = (() => {
     let moveThreshold = 0;
     let jumpThreshold = 0;
 
+    // P1 per-frame state (updated every pointermove, consumed on pointerup)
+    let p1MoveDir   = 0;       // -1 | 0 | 1
+    let p1JumpState = 'none';  // 'up' | 'none'
+
     function init(canvas) {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
@@ -44,19 +48,25 @@ const Input = (() => {
             if (state.gameOver || state.dying) return;
 
             const dx = pointerCurrentX - pointerStartX;
-            let dir = 0;
-            if (dx > moveThreshold) dir = 1;
-            else if (dx < -moveThreshold) dir = -1;
-            Network.move(Network.assigned, dir);
-            // send full pointer hint to server for per-tick decision
-            Network.pointerState(Network.assigned, {
-                startX: pointerStartX,
-                startY: pointerStartY,
-                currentX: pointerCurrentX,
-                currentY: pointerCurrentY,
-                moveThreshold,
-                jumpThreshold,
-            });
+            const dy = pointerCurrentY - pointerStartY;
+
+            if (Network.assigned !== 2) {
+                // P1: compute independent move dir and jump state from thresholds
+                if (dx > moveThreshold)       p1MoveDir = 1;
+                else if (dx < -moveThreshold) p1MoveDir = -1;
+                else                          p1MoveDir = 0;
+
+                p1JumpState = (dy < 0 && Math.abs(dy) > jumpThreshold) ? 'up' : 'none';
+
+                // apply movement immediately this frame
+                Network.move(Network.assigned, p1MoveDir);
+            } else {
+                // P2: movement only, skills handled on pointerup
+                let dir = 0;
+                if (dx > moveThreshold)       dir = 1;
+                else if (dx < -moveThreshold) dir = -1;
+                Network.move(Network.assigned, dir);
+            }
         }, { passive: false });
 
         canvas.addEventListener('pointerup', e => {
@@ -79,28 +89,26 @@ const Input = (() => {
 
             const dx = pointerCurrentX - pointerStartX;
             const dy = pointerCurrentY - pointerStartY;
+
+            // always stop movement on release
             Network.move(Network.assigned, 0);
 
-            // notify server pointer released (clear hint)
-            Network.pointerState(Network.assigned, null);
-
-            const absDX = Math.abs(dx);
-            const absDY = Math.abs(dy);
-            const isHorizontalDominant = absDX >= absDY;
-            const horizontalMoved = absDX > moveThreshold;
-            const verticalMoved = absDY > jumpThreshold;
-
             if (Network.assigned !== 2) {
-                if (verticalMoved && dy < 0) {
-                    Network.jump(Network.assigned, dx);
+                // P1: execute jump if jump state was 'up', carry last move dir as horizontal
+                if (p1JumpState === 'up') {
+                    Network.jump(Network.assigned, p1MoveDir);
                 }
+                p1JumpState = 'none';
+                p1MoveDir   = 0;
                 return;
             }
 
-            if (!isHorizontalDominant && verticalMoved) {
+            // P2: swipe gestures on release
+            const absDX = Math.abs(dx);
+            const absDY = Math.abs(dy);
+            const verticalMoved = absDY > jumpThreshold;
+            if (absDY > absDX && verticalMoved) {
                 dy < 0 ? Network.swipeUp(Network.assigned, dx) : Network.swipeDown(Network.assigned, dx);
-            } else if (isHorizontalDominant && horizontalMoved) {
-                // Horizontal dominant gesture for P2: movement is already handled by pointermove.
             }
         }, { passive: false });
 
