@@ -193,10 +193,12 @@ def register(socketio) -> None:
             return
 
         try:
-            raw_dx = float(data.get('dx', 0))
+            move_dir = int(data.get('dir', 0))
+            if move_dir not in (-1, 0, 1):
+                move_dir = 0
         except Exception:
-            raw_dx = 0.0
-        jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
+            move_dir = 0
+        jump_h_vel = move_dir * PLAYER_H_MAX_VX
 
         player['vel']                = P2_UPSKILL_JUMP_VY
         player['jump_h_vel']         = jump_h_vel
@@ -228,10 +230,12 @@ def register(socketio) -> None:
             return
 
         try:
-            raw_dx = float(data.get('dx', 0))
+            move_dir = int(data.get('dir', 0))
+            if move_dir not in (-1, 0, 1):
+                move_dir = 0
         except Exception:
-            raw_dx = 0.0
-        jump_h_vel = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, raw_dx * PLAYER_JUMP_H_VELOCITY_SCALE))
+            move_dir = 0
+        jump_h_vel = move_dir * PLAYER_H_MAX_VX
 
         player['vel']                    = P2_DOWNSKILL_JUMP_VY
         player['jump_h_vel']             = jump_h_vel

@@ -13,6 +13,9 @@ const Input = (() => {
     // P1 per-frame state (updated every pointermove, consumed on pointerup)
     let p1MoveDir   = 0;       // -1 | 0 | 1
     let p1JumpState = 'none';  // 'up' | 'none'
+    // P2 per-frame state (updated every pointermove, consumed on pointerup)
+    let p2MoveDir   = 0;       // -1 | 0 | 1
+    let p2SkillState = 'none'; // 'up' | 'down' | 'none'
 
     function init(canvas) {
         const rect = canvas.getBoundingClientRect();
@@ -62,11 +65,16 @@ const Input = (() => {
                 // apply movement immediately this frame
                 Network.move(Network.assigned, p1MoveDir);
             } else {
-                // P2: movement only, skills handled on pointerup
-                let dir = 0;
-                if (dx > moveThreshold)       dir = 1;
-                else if (dx < -moveThreshold) dir = -1;
-                Network.move(Network.assigned, dir);
+                // P2: compute independent move dir and skill state from thresholds
+                if (dx > moveThreshold)       p2MoveDir = 1;
+                else if (dx < -moveThreshold) p2MoveDir = -1;
+                else                          p2MoveDir = 0;
+
+                if (dy < -jumpThreshold)      p2SkillState = 'up';
+                else if (dy > jumpThreshold)  p2SkillState = 'down';
+                else                          p2SkillState = 'none';
+
+                Network.move(Network.assigned, p2MoveDir);
             }
         }, { passive: false });
 
@@ -104,13 +112,14 @@ const Input = (() => {
                 return;
             }
 
-            // P2: swipe gestures on release
-            const absDX = Math.abs(dx);
-            const absDY = Math.abs(dy);
-            const verticalMoved = absDY > jumpThreshold;
-            if (absDY > absDX && verticalMoved) {
-                dy < 0 ? Network.swipeUp(Network.assigned, dx) : Network.swipeDown(Network.assigned, dx);
+            // P2: execute skill on release, using last move dir as horizontal input
+            if (p2SkillState === 'up') {
+                Network.swipeUp(Network.assigned, p2MoveDir);
+            } else if (p2SkillState === 'down') {
+                Network.swipeDown(Network.assigned, p2MoveDir);
             }
+            p2SkillState = 'none';
+            p2MoveDir = 0;
         }, { passive: false });
 
         // ── 鍵盤 ──
