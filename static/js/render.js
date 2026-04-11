@@ -271,14 +271,8 @@ const Renderer = (() => {
             actionLabel = dy < 0 ? 'jump' : 'run';
         }
 
-        // highlight when gesture exceeds thresholds
-        let highlight = false;
-        if (Network.assigned === 2) {
-            highlight = horizontalMoved || verticalMoved;
-        } else {
-            // P1: only horizontal threshold or upward movement (currentY < startY)
-            highlight = horizontalMoved || (hint.currentY < hint.startY);
-        }
+        // highlight when gesture exceeds any threshold (horizontal OR vertical)
+        const highlight = (absDX > hint.moveThreshold) || (absDY > hint.jumpThreshold);
         const baseRgb = highlight ? '255,215,0' : '255,255,255';
 
         _drawPointerParticles(ctx, baseRgb);
