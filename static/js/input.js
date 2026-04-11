@@ -48,6 +48,15 @@ const Input = (() => {
             if (dx > moveThreshold) dir = 1;
             else if (dx < -moveThreshold) dir = -1;
             Network.move(Network.assigned, dir);
+            // send full pointer hint to server for per-tick decision
+            Network.pointerState(Network.assigned, {
+                startX: pointerStartX,
+                startY: pointerStartY,
+                currentX: pointerCurrentX,
+                currentY: pointerCurrentY,
+                moveThreshold,
+                jumpThreshold,
+            });
         }, { passive: false });
 
         canvas.addEventListener('pointerup', e => {
@@ -71,6 +80,9 @@ const Input = (() => {
             const dx = pointerCurrentX - pointerStartX;
             const dy = pointerCurrentY - pointerStartY;
             Network.move(Network.assigned, 0);
+
+            // notify server pointer released (clear hint)
+            Network.pointerState(Network.assigned, null);
 
             const absDX = Math.abs(dx);
             const isHorizontalDominant = absDX >= Math.abs(dy);

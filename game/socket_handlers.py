@@ -156,6 +156,24 @@ def register(socketio) -> None:
         if gs.game_state.get('dying'):
             return
 
+        # Accept either simple dir or full pointer hint
+        hint = data.get('hint', None)
+        if hint is not None:
+            # store latest pointer hint on player for per-tick decision
+            player['pointer_hint'] = hint
+            # also set move_dir for backward compatibility
+            try:
+                dx = float(hint.get('currentX', 0) - hint.get('startX', 0))
+                if dx > hint.get('moveThreshold', 0):
+                    player['move_dir'] = 1
+                elif dx < -hint.get('moveThreshold', 0):
+                    player['move_dir'] = -1
+                else:
+                    player['move_dir'] = 0
+            except Exception:
+                player['move_dir'] = 0
+            return
+
         try:
             move_dir = int(data.get('dir', 0))
         except Exception:
