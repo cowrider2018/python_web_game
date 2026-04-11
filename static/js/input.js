@@ -18,8 +18,9 @@ const Input = (() => {
         const rect = canvas.getBoundingClientRect();
         const scaleX = canvas.width / rect.width;
         const scaleY = canvas.height / rect.height;
-        moveThreshold = Math.max(1, Math.floor(canvas.width * 0.1));
-        jumpThreshold = Math.max(1, Math.floor(canvas.height * 0.1));
+        const longerSide = Math.max(canvas.width, canvas.height);
+        moveThreshold = Math.max(1, Math.floor(longerSide * 0.1));
+        jumpThreshold = Math.max(1, Math.floor(longerSide * 0.1));
 
         // ── Pointer（觸控 + 滑鼠統一）──
         canvas.addEventListener('pointerdown', e => {

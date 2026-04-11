@@ -61,6 +61,8 @@ const Renderer = (() => {
     let _treeSpawnCountdown = 0;
     let _pointerParticles = [];
     let _pointerParticleStepTimer = 0;
+    let _pointerPulses = [];
+    let _pointerLastPulseTime = 0;
 
     function _createPointerParticle(hint, t) {
         const dx = hint.currentX - hint.startX;
@@ -125,6 +127,32 @@ const Renderer = (() => {
             ctx.arc(p.x, p.y, p.radius, 0, Math.PI * 2);
             ctx.fillStyle = `rgba(${rgb},${p.alpha})`;
             ctx.fill();
+        });
+        ctx.restore();
+    }
+
+    function _createPointerPulse(startTime, threshold) {
+        _pointerPulses.push({
+            createdAt: startTime,
+            lifeMs: 1500,
+            threshold,
+        });
+    }
+
+    function _drawPointerPulses(ctx, hint, now, baseRgb) {
+        ctx.save();
+        ctx.fillStyle = `rgba(${baseRgb}, 0.3)`;
+        _pointerPulses = _pointerPulses.filter(pulse => {
+            const age = now - pulse.createdAt;
+            if (age < 0 || age > pulse.lifeMs) return false;
+            const progress = Math.min(age / pulse.lifeMs, 1);
+            const radius = Math.max(1, Math.round((pulse.threshold / 2) * progress));
+            const alpha = Math.max(0, 0.7 * (1 - progress));
+            ctx.beginPath();
+            ctx.arc(hint.startX, hint.startY, radius, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(${baseRgb}, ${alpha})`;
+            ctx.fill();
+            return true;
         });
         ctx.restore();
     }
@@ -275,16 +303,8 @@ const Renderer = (() => {
         const highlight = (absDX > hint.moveThreshold) || (absDY > hint.jumpThreshold);
         const baseRgb = highlight ? '255,215,0' : '255,255,255';
 
+        _drawPointerPulses(ctx, hint, gameTime, baseRgb);
         _drawPointerParticles(ctx, baseRgb);
-
-        const pulsePhase = (gameTime % 200) / 200;
-        const pulseRadius = Math.round(pulsePhase * 60);
-        const pulseAlpha = Math.max(0, 0.3 * (1 - pulsePhase));
-        ctx.save();
-        ctx.beginPath();
-        ctx.arc(hint.startX, hint.startY, pulseRadius, 0, Math.PI * 2);
-        ctx.fillStyle = `rgba(${baseRgb}, ${pulseAlpha})`;
-        ctx.fill();
 
         if (actionLabel) {
             ctx.font = '16px Arial';
@@ -350,9 +370,15 @@ const Renderer = (() => {
                     _pointerParticleStepTimer -= 0.025;
                     _stepPointerParticles(hint);
                 }
+                const now = Date.now();
+                if (_pointerPulses.length === 0 || now - _pointerLastPulseTime >= 500) {
+                    _pointerLastPulseTime = now;
+                    _createPointerPulse(now, hint.moveThreshold);
+                }
             } else {
                 _pointerParticles = [];
                 _pointerParticleStepTimer = 0;
+                _pointerLastPulseTime = 0;
             }
 
             // 地面：從邊界到邊界（水平和豎直都完整），並置於樹之上
