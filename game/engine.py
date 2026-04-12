@@ -228,17 +228,41 @@ def _spawn_upskill_fireball(player, role):
 # ============================================================
 
 def _apply_player_horizontal(role, player):
-    """Constant-speed horizontal movement; airborne keeps jump horizontal vel."""
+    """Horizontal movement using acceleration model.
+
+    Behavior:
+    - If airborne (jumping and above ground), keep using `jump_h_vel` as horizontal velocity.
+    - On ground, applying `move_dir` adds acceleration to `vel_x` each tick.
+    - When no input, apply friction to `vel_x`.
+    - After updating velocity, apply the movement (final position update).
+    """
     gt = gs.ground_top(role)
+
+    # Airborne: stick to jump horizontal velocity (no ground accel)
     if player.get('isJumping', False) and player['y'] < gt:
-        player['vel_x'] = player.get('jump_h_vel', 0.0)
+        player['vel_x'] = player.get('jump_h_vel', player.get('vel_x', 0.0))
     else:
-        move_dir = player.get('move_dir', 0)
-        player['vel_x'] = move_dir * PLAYER_H_MAX_VX if move_dir != 0 else 0.0
+        move_dir = int(player.get('move_dir', 0) or 0)
+        # ensure vel_x exists
+        vx = player.get('vel_x', 0.0)
+        if move_dir != 0:
+            # apply acceleration toward direction
+            vx += move_dir * PLAYER_H_ACCEL
+        else:
+            # apply friction when no input
+            vx = vx * PLAYER_H_FRICTION
+            # snap very small velocities to zero
+            if abs(vx) < 0.01:
+                vx = 0.0
 
-    player['vel_x'] = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, player['vel_x']))
-    player['x'] += player['vel_x']
+        # clamp to max horizontal speed
+        vx = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, vx))
+        player['vel_x'] = vx
 
+    # Final: move by the computed horizontal velocity
+    player['x'] += player.get('vel_x', 0.0)
+
+    # Clamp to bounds
     min_x = 0
     max_x = CANVAS_WIDTH - PLAYER_WIDTH[role]
     if player['x'] < min_x:
@@ -252,33 +276,59 @@ def _apply_player_horizontal(role, player):
 def _tick_player_physics(role, player, sio):
     """單一玩家每 tick：水平移動 → 重力 → 垂直移動 → 觸地結算 → upskill 火球計時。"""
     gt = gs.ground_top(role)
+    # 小優化：若在地上且垂直速度為 0，僅套用水平（地面）移動
     if player['y'] >= gt and player['vel'] == 0.0:
         _apply_player_horizontal(role, player)
         return
 
-    _apply_gravity(player)
-    _apply_player_horizontal(role, player)
+    # 記錄前一 tick 是否處於跳躍中
+    was_jumping = player.get('isJumping', False)
 
-    # P2 upskill 火球生成計時
+    # 先套用重力（更新 player['y'] 與 player['vel']）
+    _apply_gravity(player)
+
+    # 如果上一 tick 在空中且本 tick 已落地，先清除舊水平慣性，再套用本 tick 的加速度，最後結算移動
+    if was_jumping and player['y'] >= gt:
+        # 落地：先修正垂直位置與狀態
+        player['y'] = gt
+        player['vel'] = 0.0
+        player['jump_h_vel'] = 0.0
+        player['isJumping'] = False
+        player['canDouble'] = True
+
+        # 清除空中的舊水平慣性
+        player['vel_x'] = 0.0
+
+        # 根據當前輸入計算本 tick 的水平速度（從 0 開始累加加速度），並立即移動
+        move_dir = int(player.get('move_dir', 0) or 0)
+        vx = player.get('vel_x', 0.0)
+        if move_dir != 0:
+            vx += move_dir * PLAYER_H_ACCEL
+        else:
+            vx = vx * PLAYER_H_FRICTION
+            if abs(vx) < 0.01:
+                vx = 0.0
+        vx = max(-PLAYER_H_MAX_VX, min(PLAYER_H_MAX_VX, vx))
+        player['vel_x'] = vx
+        player['x'] += player['vel_x']
+
+        # 若是 P2，處理落地相關旗標與效果
+        if role == 2:
+            player['skillLocked'] = False
+            if player.get('downskill_pending_land'):
+                player['downskill_pending_land'] = False
+                _downskill_land(sio)
+
+    else:
+        # 正常情況：尚未落地或非從空中落地，使用既有水平物理處理（加速度/摩擦/移動）
+        _apply_player_horizontal(role, player)
+
+    # P2 upskill 火球生成計時（在本 tick 推進，無論落地與否）
     if role == 2 and player.get('upskill_spawn_tick', -1) >= 0:
         player['upskill_spawn_tick'] += 1
         if player['upskill_spawn_tick'] == P2_UPSKILL_SPAWN_TICK:
             player['upskill_spawn_tick'] = -1
             _spawn_upskill_fireball(player, role)
-
-    # 觸地結算
-    if player['y'] >= gt:
-        was_jumping         = player.get('isJumping', False)
-        player['y']         = gt
-        player['vel']       = 0.0
-        player['jump_h_vel'] = 0.0
-        player['isJumping'] = False
-        player['canDouble'] = True
-        if role == 2:
-            player['skillLocked'] = False
-            if player.get('downskill_pending_land') and was_jumping:
-                player['downskill_pending_land'] = False
-                _downskill_land(sio)
 
 
 # ============================================================
