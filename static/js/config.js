@@ -7,7 +7,7 @@ const GameConfig = {
     GROUND_Y:        560,
     PLAYER_WIDTH:    [0, 64, 128],
     PLAYER_HEIGHT:   [0, 64, 128],
-    OBSTACLE_SIZES:  { stone: [64, 64], fire: [64, 64] },
+    OBSTACLE_SIZES:  { stone: [64, 64], fire: [64, 64], dragon_1: [128, 64], dragon_2: [128, 64] },
     SERVER_FPS:      120,
 
     // 背景樹設定：可在此調整出現頻率、大小範圍與水平移動速率

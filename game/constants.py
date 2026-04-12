@@ -44,6 +44,8 @@ OBSTACLE_DESPAWN_X    = -(OBSTACLE_SPAWN_X - CANVAS_WIDTH)   # = -600
 OBSTACLE_SIZES = {
     'stone': (64, 64),
     'fire':  (64, 64),
+    'dragon_1': (96, 96),
+    'dragon_2': (96, 96),
 }
 OBSTACLE_DEFAULT_TYPE = 'stone'
 
@@ -76,3 +78,12 @@ P2_SKILL_SETS = {
 DEFAULT_P2_SKILL = 'upskill'
 
 SLOT_NAMES = {1: 'P1', 2: 'P2'}
+
+# ---- Dragon obstacle (空中來回簡諧浮動) ----
+DRAGON_TYPES = ['dragon_1', 'dragon_2']
+# Dragon 底邊 Y 範圍 (以畫面底部/地面為參考)，障礙物會在這個範圍內做簡諧運動（bottom y）
+DRAGON_Y_MIN = 100
+DRAGON_Y_MAX = GROUND_Y - 150
+# 簡諧運動週期（秒）與生成機率（在常規障礙生成時以機率替代石塊）
+DRAGON_OSC_PERIOD = 2.0
+DRAGON_SPAWN_CHANCE = 0.25

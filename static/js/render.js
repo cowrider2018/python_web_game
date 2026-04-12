@@ -8,6 +8,8 @@ const Renderer = (() => {
         'player_2_roar.png',
         'player_2_squat.png',
         'stone.png',
+        'dragon_1.png',
+        'dragon_2.png',
         'fire_1.png',
         'fire_2.png',
         'tree.png',
@@ -50,6 +52,14 @@ const Renderer = (() => {
 
     function _randomFloat(min, max) {
         return min + Math.random() * (max - min);
+    }
+
+    // 通用：回傳以時間為基準循環的貼圖檔名（base + _1..N.png）
+    function _cycleSprite(baseName, frameCount, periodMs, gameTime) {
+        frameCount = frameCount || 2;
+        periodMs = periodMs || 500;
+        const t = Math.floor((gameTime || Date.now()) / periodMs) % frameCount;
+        return `${baseName}_${t + 1}.png`;
     }
 
     // ============================================================
@@ -226,12 +236,11 @@ const Renderer = (() => {
     function _drawObstacle(ctx, obs, gameTime) {
         const cfg = GameConfig;
         let spriteName;
-        
+
         if (obs.is_fireball) {
-            // 火球每 30 ticks 轮换一次（在 120 FPS 下，约 0.25 秒；可调为 0.5 秒 = 60 ticks）
-            // 使用 gameTime（ms）或 obs 外部提供的 tick 来决定
-            const fireFrame = Math.floor((gameTime || Date.now()) / 500) % 2;  // 每 0.5 秒轮换
-            spriteName = fireFrame === 0 ? 'fire_1.png' : 'fire_2.png';
+            spriteName = _cycleSprite('fire', 2, 500, gameTime);
+        } else if (obs.is_dragon || (obs.type && String(obs.type).startsWith('dragon'))) {
+            spriteName = _cycleSprite('dragon', 2, 500, gameTime);
         } else {
             spriteName = 'stone.png';
         }
@@ -254,10 +263,15 @@ const Renderer = (() => {
         const centerX = drawX + w / 2;
         const centerY = drawY + h / 2;
         
-        // 火球或障碍物落地时，角度一律设为 Math.PI/2
-        let displayAngle = obs.angle !== undefined ? obs.angle : 0;
-        if (obs.y >= cfg.GROUND_Y) {
-            displayAngle = Math.PI / 2;
+        // 火球或障碍物落地时，角度一律设为 Math.PI/2；龍永遠不旋轉
+        let displayAngle = 0;
+        if (obs.is_dragon || (obs.type && String(obs.type).startsWith('dragon'))) {
+            displayAngle = 0;
+        } else {
+            displayAngle = obs.angle !== undefined ? obs.angle : 0;
+            if (obs.y >= cfg.GROUND_Y) {
+                displayAngle = Math.PI / 2;
+            }
         }
         
         // 如果有角度信息，根据运动轨迹旋转绘制（石块随速度方向偏转）

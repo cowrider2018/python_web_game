@@ -4,6 +4,7 @@
 from game import state as gs
 from game.constants import *
 import math
+import random
 _socketio = None
 
 
@@ -84,7 +85,11 @@ def _obs_vertical_physics(obs):
 
 
 def _obs_update_angle(obs):
-    """依速度向量更新障礙物朝向角度（用於渲染旋轉）。"""
+    """依速度向量更新障礙物朝向角度（用於渲染旋轉）。
+    龍類不進行角度旋轉，保留為 0。"""
+    if obs.get('is_dragon'):
+        obs['angle'] = 0.0
+        return
     try:
         obs_vy = obs.get('vy', 0.0)
         obs_vx = obs.get('vx', P2_UPSKILL_FIREBALL_VX) if obs.get('is_fireball') \
@@ -444,6 +449,32 @@ def _spawn_stone_obstacle():
     })
 
 
+def _spawn_dragon_obstacle():
+    """生成一個空中龍類障礙物，於右側畫面外生成並以固定水平速度向左飛行，垂直以簡諧運動擺動。
+    obs['y'] 表示底邊位置；實際垂直位置在每個 tick 以簡諧函數覆寫（忽略重力）。"""
+    t = random.choice(DRAGON_TYPES)
+    sw, sh = OBSTACLE_SIZES.get(t, (128, 64))
+    center = (DRAGON_Y_MIN + DRAGON_Y_MAX) / 2.0
+    amp = max(0.0, (DRAGON_Y_MAX - DRAGON_Y_MIN) / 2.0)
+    period_ticks = max(1, int(SERVER_FPS * DRAGON_OSC_PERIOD))
+    gs.game_state['obstacles'].append({
+        'x':                 OBSTACLE_SPAWN_X,
+        'y':                 center,
+        'scored':            False,
+        'is_dragon':         True,
+        'type':              t,
+        'w':                 sw,
+        'h':                 sh,
+        'vx':                OBSTACLE_SPEED,
+        'phase':             random.random() * 2 * math.pi,
+        'osc_center':        center,
+        'osc_amp':           amp,
+        'osc_period_ticks':  period_ticks,
+        'angle':             0.0,
+    })
+    print(f"[spawn] dragon {t} tick={gs.tick_count}")
+
+
 # ============================================================
 # 地面動畫
 # ============================================================
@@ -506,7 +537,19 @@ def game_loop() -> None:
         for obs in gs.game_state['obstacles']:
             ow, oh = _obs_size(obs)
             _obs_move_horizontal(obs)
-            _obs_vertical_physics(obs)
+            # 龍類使用簡諧運動覆寫垂直位置，並忽略重力
+            if obs.get('is_dragon'):
+                period_ticks = obs.get('osc_period_ticks', max(1, int(SERVER_FPS * DRAGON_OSC_PERIOD)))
+                phase = obs.get('phase', 0.0)
+                amp = obs.get('osc_amp', 0.0)
+                center = obs.get('osc_center', obs.get('y', 0.0))
+                omega = (2 * math.pi / period_ticks) if period_ticks else 0.0
+                y = center + amp * math.sin(omega * gs.tick_count + phase)
+                vy = amp * omega * math.cos(omega * gs.tick_count + phase)
+                obs['y'] = y
+                obs['vy'] = vy
+            else:
+                _obs_vertical_physics(obs)
             _obs_update_angle(obs)
 
             if not gs.game_state['dying'] and p1 and p1['active']:
@@ -533,7 +576,11 @@ def game_loop() -> None:
         spawn_t += 1
         if spawn_t >= SPAWN_INTERVAL_TICKS:
             spawn_t = 0
-            _spawn_stone_obstacle()
+            # 以機率產生龍或石塊（龍忽略重力，做簡諧擺動）
+            if random.random() < DRAGON_SPAWN_CHANCE:
+                _spawn_dragon_obstacle()
+            else:
+                _spawn_stone_obstacle()
 
         # ── 7. 地面動畫 ─────────────────────────────────────
         _tick_ground_animation()
