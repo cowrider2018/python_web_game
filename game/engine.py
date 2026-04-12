@@ -107,6 +107,35 @@ def _obs_tick_fading(obs):
     return obs['fade_ticks_remaining'] <= 0
 
 
+def _tick_obstacle_sprite_schedule(obs):
+    """推進障礙物的 sprite_schedule；支援循環（obs['sprite_schedule_loop']=True）或一次性排程。
+    會依序更新 obs['sprite'] 為當前圖檔名稱。"""
+    sched = obs.get('sprite_schedule')
+    if not sched:
+        return
+    loop = obs.get('sprite_schedule_loop', False)
+    obs['schedule_tick'] = obs.get('schedule_tick', 0) + 1
+    # 若尚未達到當前 frame 的停留 ticks，繼續等待
+    if obs['schedule_tick'] < sched[0]['ticks']:
+        return
+    # 到達時間，推進下一張
+    obs['schedule_tick'] = 0
+    if loop:
+        # 旋轉第一張至尾端，並更新當前 sprite
+        first = sched.pop(0)
+        sched.append(first)
+        obs['sprite'] = sched[0]['sprite']
+    else:
+        # 非循環：消耗第一張，若還有剩下設定下一張，否則清除排程
+        sched.pop(0)
+        if sched:
+            obs['sprite'] = sched[0]['sprite']
+        else:
+            obs.pop('sprite_schedule', None)
+            obs.pop('schedule_tick', None)
+            obs.pop('sprite_schedule_loop', None)
+
+
 # ============================================================
 # P2 技能對障礙物的影響
 # ============================================================
@@ -166,7 +195,7 @@ def _spawn_upskill_fireball(player, role):
     obs_x  = player['x'] + PLAYER_WIDTH[role] * 4 // 5 - fw // 2
     obs_y  = int(player['y'] + PLAYER_HEIGHT[role] * 4 // 5 + fh // 2)
     obs_y  = max(fh, min(obs_y, CANVAS_HEIGHT))
-    gs.game_state['obstacles'].append({
+    obs = {
         'x':                 obs_x,
         'y':                 obs_y,
         'scored':            False,
@@ -180,7 +209,17 @@ def _spawn_upskill_fireball(player, role):
         'w':                 fw,
         'h':                 fh,
         'angle':             math.atan2(0, P2_UPSKILL_FIREBALL_VX),
-    })
+    }
+    gs.game_state['obstacles'].append(obs)
+    # 若常數有定義 appearance set，套用並讓其循環
+    try:
+        ap = OBSTACLE_APPEARANCE_SETS.get('fire')
+        if ap:
+            gs.apply_sprite_schedule(obs, ap)
+            if ap.get('loop'):
+                obs['sprite_schedule_loop'] = True
+    except Exception:
+        pass
     print(f"[upskill] fireball spawned tick={gs.tick_count}")
 
 
@@ -457,7 +496,7 @@ def _spawn_dragon_obstacle():
     center = (DRAGON_Y_MIN + DRAGON_Y_MAX) / 2.0
     amp = max(0.0, (DRAGON_Y_MAX - DRAGON_Y_MIN) / 2.0)
     period_ticks = max(1, int(SERVER_FPS * DRAGON_OSC_PERIOD))
-    gs.game_state['obstacles'].append({
+    obs = {
         'x':                 OBSTACLE_SPAWN_X,
         'y':                 center,
         'scored':            False,
@@ -471,7 +510,17 @@ def _spawn_dragon_obstacle():
         'osc_amp':           amp,
         'osc_period_ticks':  period_ticks,
         'angle':             0.0,
-    })
+    }
+    gs.game_state['obstacles'].append(obs)
+    # 套用 appearance schedule（若定義）且通常龍要循環動畫
+    try:
+        ap = OBSTACLE_APPEARANCE_SETS.get('dragon')
+        if ap:
+            gs.apply_sprite_schedule(obs, ap)
+            if ap.get('loop'):
+                obs['sprite_schedule_loop'] = True
+    except Exception:
+        pass
     print(f"[spawn] dragon {t} tick={gs.tick_count}")
 
 
@@ -551,6 +600,8 @@ def game_loop() -> None:
             else:
                 _obs_vertical_physics(obs)
             _obs_update_angle(obs)
+            # 進行障礙物的 sprite schedule（若有）
+            _tick_obstacle_sprite_schedule(obs)
 
             if not gs.game_state['dying'] and p1 and p1['active']:
                 _p1_process_obs_interaction(p1, obs, ow, oh)

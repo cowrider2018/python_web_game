@@ -87,3 +87,20 @@ DRAGON_Y_MAX = GROUND_Y - 150
 # 簡諧運動週期（秒）與生成機率（在常規障礙生成時以機率替代石塊）
 DRAGON_OSC_PERIOD = 2.0
 DRAGON_SPAWN_CHANCE = 0.25
+
+# ---- 障礙物外觀陣列（可重用，類似 P2_SKILL_SETS） ----
+# 每個 entry 包含：target（目標類別標籤）、sequence（圖檔名稱陣列）、frames（每張圖所停留的 TICK 數）、loop（是否循環）
+OBSTACLE_APPEARANCE_SETS = {
+    'fire': {
+        'target': 'fire',
+        'sequence': ['fire_1.png', 'fire_2.png'],
+        'frames': [60, 60],
+        'loop': True,
+    },
+    'dragon': {
+        'target': 'dragon',
+        'sequence': ['dragon_1.png', 'dragon_2.png'],
+        'frames': [60, 60],
+        'loop': True,
+    },
+}

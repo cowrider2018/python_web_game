@@ -15,6 +15,7 @@ from game.constants import (
     SERVER_FPS, PORT,
     P2_SKILL_SETS, DEFAULT_P2_SKILL,
 )
+from game.constants import OBSTACLE_APPEARANCE_SETS
 from game import engine, socket_handlers
 
 app = Flask(__name__)
@@ -47,6 +48,7 @@ def game_config():
         'player_width':     PLAYER_WIDTH,      # Array: [0, P1_width, P2_width]
         'player_height':    PLAYER_HEIGHT,     # Array: [0, P1_height, P2_height]
         'obstacle_sizes':   OBSTACLE_SIZES,
+        'obstacle_appearance_sets': OBSTACLE_APPEARANCE_SETS,
         'server_fps':       SERVER_FPS,
         'p2_skill_sets':    P2_SKILL_SETS,
         'p2_default_skill': DEFAULT_P2_SKILL,

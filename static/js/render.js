@@ -237,7 +237,10 @@ const Renderer = (() => {
         const cfg = GameConfig;
         let spriteName;
 
-        if (obs.is_fireball) {
+        // 優先使用 server 指定的 sprite（如果有），否則退回到 client 端循環或類型預設
+        if (obs.sprite) {
+            spriteName = obs.sprite;
+        } else if (obs.is_fireball) {
             spriteName = _cycleSprite('fire', 2, 500, gameTime);
         } else if (obs.is_dragon || (obs.type && String(obs.type).startsWith('dragon'))) {
             spriteName = _cycleSprite('dragon', 2, 500, gameTime);

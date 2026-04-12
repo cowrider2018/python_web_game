@@ -8,6 +8,10 @@ const GameConfig = {
     PLAYER_WIDTH:    [0, 64, 128],
     PLAYER_HEIGHT:   [0, 64, 128],
     OBSTACLE_SIZES:  { stone: [64, 64], fire: [64, 64], dragon_1: [128, 64], dragon_2: [128, 64] },
+    OBSTACLE_APPEARANCE_SETS: {
+        fire: { target: 'fire', sequence: ['fire_1.png', 'fire_2.png'], frames: [60,60], loop: true },
+        dragon: { target: 'dragon', sequence: ['dragon_1.png', 'dragon_2.png'], frames: [60,60], loop: true },
+    },
     SERVER_FPS:      120,
 
     // 背景樹設定：可在此調整出現頻率、大小範圍與水平移動速率
@@ -49,6 +53,7 @@ const GameConfig = {
                 this.TREE_SCALE_MIN          = cfg.tree_scale_min ?? this.TREE_SCALE_MIN;
                 this.TREE_SCALE_MAX          = cfg.tree_scale_max ?? this.TREE_SCALE_MAX;
                 this.TREE_SPEED              = cfg.tree_speed ?? this.TREE_SPEED;
+                if (cfg.obstacle_appearance_sets) this.OBSTACLE_APPEARANCE_SETS = cfg.obstacle_appearance_sets;
                 this._resolve();
             })
             .catch(() => this._resolve());
